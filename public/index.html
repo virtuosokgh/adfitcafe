@@ -95,6 +95,12 @@
     <div id="error-msg" class="error-msg hidden"></div>
     <div id="empty-msg" class="empty-msg hidden">카페/테이블 광고 단위 데이터가 없습니다.</div>
 
+    <!-- 날짜별 수익 차트 영역 -->
+    <div class="chart-section" id="chart-section" style="display:none;">
+      <h2>날짜별 수익 추이</h2>
+      <canvas id="profit-chart"></canvas>
+    </div>
+
     <!-- 광고단위별 상세 테이블 -->
     <div class="table-section" id="table-section" style="display:none;">
       <div class="table-header-row">
@@ -119,12 +125,6 @@
           <tbody id="result-body"></tbody>
         </table>
       </div>
-    </div>
-
-    <!-- 날짜별 수익 차트 영역 -->
-    <div class="chart-section" id="chart-section" style="display:none;">
-      <h2>날짜별 수익 추이</h2>
-      <canvas id="profit-chart"></canvas>
     </div>
   </div>
 
