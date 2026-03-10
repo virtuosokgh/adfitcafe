@@ -6,6 +6,7 @@
 let currentPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let allRows = [];             // 필터 전 원본(카페/테이블만)
 let chartInstance = null;
+const apiCache = new Map();   // API 응답 캐시 (같은 조건 재조회 시 즉시 반환)
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -15,11 +16,10 @@ function isCafeUnit(name) {
 }
 
 // ── 플랫폼 매핑 ───────────────────────────
-// 실제 Adfit mediaName 기반 매핑
 function guessPlatform(row) {
   const media = (row.mediaName || '').toLowerCase();
-  if (media.startsWith('android') || media.includes('android')) return 'App Android';
-  if (media.startsWith('ios') || media.includes('ios')) return 'App iOS';
+  if (media.includes('android')) return 'App Android';
+  if (media.includes('ios'))     return 'App iOS';
   if (media.startsWith('mw') || media.includes('mw_')) return 'Mobile Web';
   if (media.startsWith('pw') || media.includes('pw_')) return 'PC Web';
   return row.mediaName || '기타';
@@ -34,95 +34,120 @@ function daysAgo(n) {
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
 }
-function toYYYYMMDD(dateStr) {
-  return dateStr.replace(/-/g, '');
-}
-function toYYYYMM(monthStr) {
-  return monthStr.replace(/-/g, '');
-}
+function toYYYYMMDD(dateStr) { return dateStr.replace(/-/g, ''); }
+function toYYYYMM(monthStr)  { return monthStr.replace(/-/g, ''); }
 function formatDate(raw) {
-  // raw: YYYYMMDD 또는 YYYYMM
-  if (raw && raw.length === 8) {
-    return `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
-  }
-  if (raw && raw.length === 6) {
-    return `${raw.slice(0,4)}-${raw.slice(4,6)}`;
-  }
+  if (raw && raw.length === 8) return `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
+  if (raw && raw.length === 6) return `${raw.slice(0,4)}-${raw.slice(4,6)}`;
   return raw || '-';
 }
 
 // ── 숫자 포맷 ────────────────────────────
-function comma(n) {
-  return (n || 0).toLocaleString();
-}
-function won(n) {
-  return `${comma(n)}원`;
-}
+function comma(n) { return (n || 0).toLocaleString(); }
+function won(n)   { return `${comma(n)}원`; }
 function pct(a, b) {
   if (!b) return '0.00%';
   return ((a / b) * 100).toFixed(2) + '%';
 }
 
-// ── 주별 날짜 계산 ────────────────────────
+// ── 주별 날짜 계산 (행의 day 값 → 해당 주 월~일) ─────
 function getWeekRange(dateStr) {
   const d = new Date(dateStr);
-  const day = d.getDay(); // 0=일
+  const day = d.getDay();
   const monday = new Date(d);
   monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return {
     start: monday.toISOString().slice(0, 10),
-    end: sunday.toISOString().slice(0, 10)
+    end:   sunday.toISOString().slice(0, 10)
+  };
+}
+
+// ── ISO 주차 ↔ input[type=week] 변환 ────────────
+function getISOWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+function getISOWeekYear(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  return d.getFullYear();
+}
+/** 날짜 문자열 → "YYYY-Www" (input[type=week] 값 형식) */
+function dateToWeekInput(dateStr) {
+  const d = new Date(dateStr);
+  const week = getISOWeek(d);
+  const year = getISOWeekYear(d);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+/** "YYYY-Www" → { start: 'YYYY-MM-DD'(월), end: 'YYYY-MM-DD'(일) } */
+function weekInputToRange(weekStr) {
+  const [yearStr, weekPart] = weekStr.split('-W');
+  const year = parseInt(yearStr);
+  const week = parseInt(weekPart);
+  // ISO week 1의 월요일: Jan 4는 항상 1주차 안에 있음
+  const jan4 = new Date(year, 0, 4);
+  const dayOfWeek = (jan4.getDay() + 6) % 7; // 0=Mon…6=Sun
+  const week1Monday = new Date(jan4);
+  week1Monday.setDate(jan4.getDate() - dayOfWeek);
+  const monday = new Date(week1Monday);
+  monday.setDate(week1Monday.getDate() + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return {
+    start: monday.toISOString().slice(0, 10),
+    end:   sunday.toISOString().slice(0, 10)
   };
 }
 
 // ── DOM 참조 ──────────────────────────────
-const tabBtns       = document.querySelectorAll('.tab-btn');
-const dateRanges    = { daily: 'date-range-daily', weekly: 'date-range-weekly', monthly: 'date-range-monthly' };
-const startDateD    = document.getElementById('start-date-d');
-const endDateD      = document.getElementById('end-date-d');
-const startDateW    = document.getElementById('start-date-w');
-const endDateW      = document.getElementById('end-date-w');
-const startDateM    = document.getElementById('start-date-m');
-const endDateM      = document.getElementById('end-date-m');
-const adunitFilter  = document.getElementById('adunit-filter');
+const tabBtns        = document.querySelectorAll('.tab-btn');
+const dateRanges     = { daily: 'date-range-daily', weekly: 'date-range-weekly', monthly: 'date-range-monthly' };
+const startDateD     = document.getElementById('start-date-d');
+const endDateD       = document.getElementById('end-date-d');
+const startDateW     = document.getElementById('start-date-w');
+const endDateW       = document.getElementById('end-date-w');
+const startDateM     = document.getElementById('start-date-m');
+const endDateM       = document.getElementById('end-date-m');
+const adunitFilter   = document.getElementById('adunit-filter');
 const platformFilter = document.getElementById('platform-filter');
-const searchBtn     = document.getElementById('search-btn');
-const loadingEl     = document.getElementById('loading');
-const errorEl       = document.getElementById('error-msg');
-const emptyEl       = document.getElementById('empty-msg');
-const summaryCards  = document.getElementById('summary-cards');
-const platformSection = document.getElementById('platform-section');
-const platformCardsEl = document.getElementById('platform-cards');
-const tableSection  = document.getElementById('table-section');
-const resultBody    = document.getElementById('result-body');
-const rowCountEl    = document.getElementById('row-count');
-const chartSection  = document.getElementById('chart-section');
-const totalProfit   = document.getElementById('total-profit');
+const searchBtn      = document.getElementById('search-btn');
+const loadingEl      = document.getElementById('loading');
+const errorEl        = document.getElementById('error-msg');
+const emptyEl        = document.getElementById('empty-msg');
+const summaryCards   = document.getElementById('summary-cards');
+const platformSection  = document.getElementById('platform-section');
+const platformCardsEl  = document.getElementById('platform-cards');
+const tableSection   = document.getElementById('table-section');
+const resultBody     = document.getElementById('result-body');
+const rowCountEl     = document.getElementById('row-count');
+const chartSection   = document.getElementById('chart-section');
+const totalProfit    = document.getElementById('total-profit');
 const totalImpression = document.getElementById('total-impression');
-const totalClick    = document.getElementById('total-click');
-const totalCtr      = document.getElementById('total-ctr');
+const totalClick     = document.getElementById('total-click');
+const totalCtr       = document.getElementById('total-ctr');
 
 // ── 초기값 설정 ───────────────────────────
 function initDates() {
   const t = today();
-  const ago30 = daysAgo(30);
-  const ago7  = daysAgo(7);
 
-  startDateD.value = ago30;
+  // 일별: 최근 30일
+  startDateD.value = daysAgo(30);
   endDateD.value   = t;
-  startDateW.value = ago7;
-  endDateW.value   = t;
 
-  const thisMonth = t.slice(0, 7);
-  const threeMonthsAgo = (() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 2);
-    return d.toISOString().slice(0, 7);
-  })();
-  startDateM.value = threeMonthsAgo;
-  endDateM.value   = thisMonth;
+  // 주별: 최근 4주 (input[type=week] 형식)
+  startDateW.value = dateToWeekInput(daysAgo(27));
+  endDateW.value   = dateToWeekInput(t);
+
+  // 월별: 최근 3개월
+  const d3m = new Date();
+  d3m.setMonth(d3m.getMonth() - 2);
+  startDateM.value = d3m.toISOString().slice(0, 7);
+  endDateM.value   = t.slice(0, 7);
 }
 
 // ── 탭 전환 ──────────────────────────────
@@ -133,36 +158,19 @@ function switchPeriod(period) {
     document.getElementById(id).classList.toggle('hidden', p !== period);
   });
 }
-
-tabBtns.forEach(btn => {
-  btn.addEventListener('click', () => switchPeriod(btn.dataset.period));
-});
+tabBtns.forEach(btn => btn.addEventListener('click', () => switchPeriod(btn.dataset.period)));
 
 // ── 검색 파라미터 수집 ────────────────────
 function getSearchParams() {
   if (currentPeriod === 'daily') {
-    return {
-      periodType: 'D',
-      startDate: toYYYYMMDD(startDateD.value),
-      endDate: toYYYYMMDD(endDateD.value)
-    };
+    return { periodType: 'D', startDate: toYYYYMMDD(startDateD.value), endDate: toYYYYMMDD(endDateD.value) };
   }
   if (currentPeriod === 'weekly') {
-    // 주별: 선택한 시작주의 월요일 ~ 종료주의 일요일 (일별 API 사용)
-    const sr = getWeekRange(startDateW.value);
-    const er = getWeekRange(endDateW.value);
-    return {
-      periodType: 'D',
-      startDate: toYYYYMMDD(sr.start),
-      endDate: toYYYYMMDD(er.end)
-    };
+    const sr = weekInputToRange(startDateW.value);
+    const er = weekInputToRange(endDateW.value);
+    return { periodType: 'D', startDate: toYYYYMMDD(sr.start), endDate: toYYYYMMDD(er.end) };
   }
-  // monthly
-  return {
-    periodType: 'M',
-    startDate: toYYYYMM(startDateM.value),
-    endDate: toYYYYMM(endDateM.value)
-  };
+  return { periodType: 'M', startDate: toYYYYMM(startDateM.value), endDate: toYYYYMM(endDateM.value) };
 }
 
 // ── UI 상태 초기화 ────────────────────────
@@ -170,15 +178,14 @@ function clearUI() {
   loadingEl.classList.add('hidden');
   errorEl.classList.add('hidden');
   emptyEl.classList.add('hidden');
-  summaryCards.style.display = 'none';
+  summaryCards.style.display   = 'none';
   platformSection.style.display = 'none';
-  tableSection.style.display = 'none';
-  chartSection.style.display = 'none';
-  resultBody.innerHTML = '';
-  platformCardsEl.innerHTML = '';
+  tableSection.style.display   = 'none';
+  chartSection.style.display   = 'none';
+  resultBody.innerHTML         = '';
+  platformCardsEl.innerHTML    = '';
 }
 
-// ── 오류 표시 ────────────────────────────
 function showError(msg) {
   errorEl.textContent = msg;
   errorEl.classList.remove('hidden');
@@ -201,29 +208,24 @@ function updateAdunitFilter(rows) {
 // ── 필터 적용 ────────────────────────────
 function applyFilters(rows) {
   let result = [...rows];
-  const adunit = adunitFilter.value;
+  const adunit   = adunitFilter.value;
   const platform = platformFilter.value;
-  if (adunit) result = result.filter(r => r.adunitName === adunit);
-  if (platform) result = result.filter(r => r._platform === platform);
+  if (adunit)   result = result.filter(r => r.adunitName === adunit);
+  if (platform) result = result.filter(r => r._platform  === platform);
   return result;
 }
 
 // ── 주별 그룹핑 ───────────────────────────
 function groupByWeek(rows) {
-  // day 필드: "YYYYMMDD"
   const map = new Map();
   rows.forEach(r => {
     const dateStr = (r.day || r.month || '').slice(0, 8);
     if (!dateStr) return;
     const isoDate = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`;
-    const wr = getWeekRange(isoDate);
+    const wr  = getWeekRange(isoDate);
     const key = `${r.adunitId}__${r.mediaId}__${wr.start}`;
     if (!map.has(key)) {
-      map.set(key, {
-        ...r,
-        _weekLabel: `${wr.start} ~ ${wr.end}`,
-        request: 0, response: 0, impression: 0, click: 0, profit: 0
-      });
+      map.set(key, { ...r, _weekLabel: `${wr.start} ~ ${wr.end}`, request: 0, response: 0, impression: 0, click: 0, profit: 0 });
     }
     const g = map.get(key);
     g.request    += r.request    || 0;
@@ -236,32 +238,27 @@ function groupByWeek(rows) {
 }
 
 // ── 클립보드 복사 ────────────────────────
-const COPY_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const COPY_SVG  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const CHECK_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 function copyBtn(rawValue) {
   return `<button class="copy-btn" data-raw="${rawValue}" title="숫자 복사">${COPY_SVG}</button>`;
 }
-
 document.addEventListener('click', e => {
   const btn = e.target.closest('.copy-btn');
   if (!btn) return;
-  const raw = btn.dataset.raw;
-  navigator.clipboard.writeText(raw).then(() => {
+  navigator.clipboard.writeText(btn.dataset.raw).then(() => {
     btn.innerHTML = CHECK_SVG;
     btn.classList.add('copied');
-    setTimeout(() => {
-      btn.innerHTML = COPY_SVG;
-      btn.classList.remove('copied');
-    }, 1500);
+    setTimeout(() => { btn.innerHTML = COPY_SVG; btn.classList.remove('copied'); }, 1500);
   });
 });
 
 // ── 요약 카드 렌더 ───────────────────────
 function renderSummary(rows) {
-  const profit = rows.reduce((s, r) => s + (r.profit || 0), 0);
+  const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
   const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
-  const clk    = rows.reduce((s, r) => s + (r.click || 0), 0);
+  const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
   const ctrNum = imp ? ((clk / imp) * 100).toFixed(2) : '0.00';
   totalProfit.innerHTML     = `<span>${won(profit)}</span>${copyBtn(profit)}`;
   totalImpression.innerHTML = `<span>${comma(imp)}</span>${copyBtn(imp)}`;
@@ -281,14 +278,11 @@ function renderPlatformCards(rows) {
     g.impression += r.impression || 0;
     g.click      += r.click      || 0;
   });
-
-  const ORDER = ['PC Web', 'Mobile Web', 'App iOS', 'App Android'];
+  const ORDER  = ['PC Web', 'Mobile Web', 'App iOS', 'App Android'];
   const sorted = [...map.entries()].sort((a, b) => {
-    const ia = ORDER.indexOf(a[0]);
-    const ib = ORDER.indexOf(b[0]);
+    const ia = ORDER.indexOf(a[0]), ib = ORDER.indexOf(b[0]);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
-
   platformCardsEl.innerHTML = '';
   sorted.forEach(([platform, data]) => {
     const div = document.createElement('div');
@@ -330,7 +324,6 @@ function renderTable(rows) {
 
 // ── 차트 렌더 ────────────────────────────
 function renderChart(rows) {
-  // 날짜별 합계
   const map = new Map();
   rows.forEach(r => {
     const label = currentPeriod === 'weekly'
@@ -342,7 +335,6 @@ function renderChart(rows) {
   const data   = labels.map(l => map.get(l));
 
   chartSection.style.display = '';
-
   if (chartInstance) chartInstance.destroy();
   const ctx = document.getElementById('profit-chart').getContext('2d');
   chartInstance = new Chart(ctx, {
@@ -362,19 +354,9 @@ function renderChart(rows) {
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => won(ctx.parsed.y)
-          }
-        }
+        tooltip: { callbacks: { label: ctx => won(ctx.parsed.y) } }
       },
-      scales: {
-        y: {
-          ticks: {
-            callback: v => won(v)
-          }
-        }
-      }
+      scales: { y: { ticks: { callback: v => won(v) } } }
     }
   });
 }
@@ -393,19 +375,22 @@ async function fetchAndRender() {
 
   try {
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`/api/report?${qs}`);
-    const json = await res.json();
 
-    if (!res.ok) {
-      throw new Error(json.error || `HTTP ${res.status}`);
+    // ── 캐시 히트 시 즉시 반환 ──────────────
+    let json;
+    if (apiCache.has(qs)) {
+      json = apiCache.get(qs);
+    } else {
+      const res = await fetch(`/api/report?${qs}`);
+      json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // 캐시 저장 (최대 20개 유지)
+      if (apiCache.size >= 20) apiCache.delete(apiCache.keys().next().value);
+      apiCache.set(qs, json);
     }
 
-    // 카페/테이블 필터
     const rows = (json.rows || []).filter(r => isCafeUnit(r.adunitName));
-
-    // 플랫폼 추론 부착
     rows.forEach(r => { r._platform = guessPlatform(r); });
-
     allRows = rows;
 
     loadingEl.classList.add('hidden');
@@ -415,14 +400,9 @@ async function fetchAndRender() {
       return;
     }
 
-    // 광고단위 필터 옵션 갱신
     updateAdunitFilter(rows);
-
-    // 필터 & 주별 그룹핑 적용
     let displayRows = applyFilters(rows);
-    if (currentPeriod === 'weekly') {
-      displayRows = groupByWeek(displayRows);
-    }
+    if (currentPeriod === 'weekly') displayRows = groupByWeek(displayRows);
 
     renderSummary(displayRows);
     renderPlatformCards(displayRows);
@@ -440,9 +420,7 @@ async function fetchAndRender() {
 function reRender() {
   if (allRows.length === 0) return;
   let displayRows = applyFilters(allRows);
-  if (currentPeriod === 'weekly') {
-    displayRows = groupByWeek(displayRows);
-  }
+  if (currentPeriod === 'weekly') displayRows = groupByWeek(displayRows);
   renderSummary(displayRows);
   renderPlatformCards(displayRows);
   renderTable(displayRows);
@@ -452,11 +430,7 @@ function reRender() {
 adunitFilter.addEventListener('change', reRender);
 platformFilter.addEventListener('change', reRender);
 searchBtn.addEventListener('click', fetchAndRender);
-
-// Enter 키 지원
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter') fetchAndRender();
-});
+document.addEventListener('keydown', e => { if (e.key === 'Enter') fetchAndRender(); });
 
 // ── 초기화 ───────────────────────────────
 initDates();

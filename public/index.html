@@ -28,9 +28,9 @@
         <label>종료일 <input type="date" id="end-date-d" /></label>
       </div>
       <div class="date-range hidden" id="date-range-weekly">
-        <label>시작 주 <input type="date" id="start-date-w" /></label>
+        <label>시작 주 <input type="week" id="start-date-w" /></label>
         <span class="dash">~</span>
-        <label>종료 주 <input type="date" id="end-date-w" /></label>
+        <label>종료 주 <input type="week" id="end-date-w" /></label>
       </div>
       <div class="date-range hidden" id="date-range-monthly">
         <label>시작 월 <input type="month" id="start-date-m" /></label>
@@ -88,7 +88,10 @@
     </div>
 
     <!-- 로딩 / 오류 / 데이터 없음 -->
-    <div id="loading" class="loading hidden">데이터를 불러오는 중...</div>
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <span>데이터를 불러오는 중...</span>
+    </div>
     <div id="error-msg" class="error-msg hidden"></div>
     <div id="empty-msg" class="empty-msg hidden">카페/테이블 광고 단위 데이터가 없습니다.</div>
 
