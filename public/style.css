@@ -460,6 +460,52 @@ tbody td:nth-child(3) { text-align: left; }
 }
 
 /* =========================================
+   Flatpickr 캘린더 빠른 선택 버튼
+   ========================================= */
+.fp-quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.fp-quick-btn {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.fp-quick-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #EEF4FF;
+}
+.fp-quick-btn:active { transform: scale(0.95); }
+
+/* Flatpickr 캘린더 컨테이너를 앱 디자인에 맞게 */
+.flatpickr-calendar {
+  border-radius: var(--radius) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.13) !important;
+  border: 1px solid var(--border) !important;
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif !important;
+}
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.flatpickr-day.today { border-color: var(--primary) !important; }
+.flatpickr-day:hover { background: #EEF4FF !important; }
+
+/* =========================================
    반응형
    ========================================= */
 @media (max-width: 640px) {

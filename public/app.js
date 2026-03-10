@@ -10,6 +10,8 @@ const apiCache = new Map();   // API 응답 캐시 (같은 조건 재조회 시 
 let sortCol = null;           // 현재 정렬 컬럼 키
 let sortDir = 1;              // 1=오름차순, -1=내림차순
 let pendingAdunit = '';       // 새로고침 복원용 광고단위 임시 저장
+let fpStart = null;           // Flatpickr 시작일 인스턴스
+let fpEnd   = null;           // Flatpickr 종료일 인스턴스
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -594,7 +596,57 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
   reRender();
 });
 
+// ── Flatpickr 초기화 (일별 날짜 입력 캘린더 안 버튼) ──
+function initFlatpickr() {
+  function addShortcuts(calendarContainer) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-quick-btns';
+    const shortcuts = [
+      { label: '오늘',      fn: () => { const t = today();    fpStart.setDate(t, true);       fpEnd.setDate(t, true); } },
+      { label: '어제',      fn: () => { const d = daysAgo(1); fpStart.setDate(d, true);       fpEnd.setDate(d, true); } },
+      { label: '그저께',    fn: () => { const d = daysAgo(2); fpStart.setDate(d, true);       fpEnd.setDate(d, true); } },
+      { label: '최근 7일',  fn: () => { fpStart.setDate(daysAgo(6),  true); fpEnd.setDate(today(), true); } },
+      { label: '최근 30일', fn: () => { fpStart.setDate(daysAgo(29), true); fpEnd.setDate(today(), true); } },
+    ];
+    shortcuts.forEach(({ label, fn }) => {
+      const btn = document.createElement('button');
+      btn.type        = 'button';
+      btn.className   = 'fp-quick-btn';
+      btn.textContent = label;
+      btn.addEventListener('mousedown', e => {
+        e.preventDefault();   // 포커스 이동 막아 캘린더 유지
+        fn();
+        fpStart.close();
+        fpEnd.close();
+        saveState();
+      });
+      wrap.appendChild(btn);
+    });
+    calendarContainer.appendChild(wrap);
+  }
+
+  const commonOpts = {
+    locale:        'ko',
+    dateFormat:    'Y-m-d',
+    disableMobile: true,
+    onChange:      () => saveState()
+  };
+
+  fpStart = flatpickr(startDateD, {
+    ...commonOpts,
+    defaultDate: startDateD.value || daysAgo(30),
+    onReady(_, __, fp) { addShortcuts(fp.calendarContainer); }
+  });
+
+  fpEnd = flatpickr(endDateD, {
+    ...commonOpts,
+    defaultDate: endDateD.value || today(),
+    onReady(_, __, fp) { addShortcuts(fp.calendarContainer); }
+  });
+}
+
 // ── 초기화 ───────────────────────────────
 initDates();                           // 기본값 먼저 세팅
 const hadSavedState = restoreState();  // 저장된 조건으로 덮어씌우기
+initFlatpickr();                       // Flatpickr 초기화 (복원값을 defaultDate로 사용)
 if (hadSavedState) fetchAndRender();   // 저장 조건 있으면 자동 조회

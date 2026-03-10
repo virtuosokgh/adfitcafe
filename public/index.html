@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>카페 애드핏 수익 대시보드</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -23,16 +24,9 @@
     <!-- 날짜 선택 영역 -->
     <div class="controls">
       <div class="date-range" id="date-range-daily">
-        <label>시작일 <input type="date" id="start-date-d" /></label>
+        <label>시작일 <input type="text" id="start-date-d" placeholder="날짜 선택" readonly /></label>
         <span class="dash">~</span>
-        <label>종료일 <input type="date" id="end-date-d" /></label>
-        <div class="quick-btns">
-          <button class="quick-btn" data-quick="today">오늘</button>
-          <button class="quick-btn" data-quick="yesterday">어제</button>
-          <button class="quick-btn" data-quick="2daysago">그저께</button>
-          <button class="quick-btn" data-quick="last7">최근 7일</button>
-          <button class="quick-btn" data-quick="last30">최근 30일</button>
-        </div>
+        <label>종료일 <input type="text" id="end-date-d" placeholder="날짜 선택" readonly /></label>
       </div>
       <div class="date-range hidden" id="date-range-weekly">
         <label>시작 주 <input type="week" id="start-date-w" /></label>
@@ -154,6 +148,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
