@@ -178,9 +178,12 @@ header .subtitle strong {
    ========================================= */
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, 1fr);  /* 6개 → 3×2 균등 배치 */
   gap: 16px;
   margin-bottom: 24px;
+}
+@media (max-width: 768px) {
+  .summary-cards { grid-template-columns: repeat(2, 1fr); }
 }
 .card {
   background: var(--surface);

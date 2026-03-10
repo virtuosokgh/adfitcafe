@@ -183,11 +183,14 @@ function restoreState() {
       if (s.platform) platformFilter.value = s.platform;
       if (s.adunit)   pendingAdunit        = s.adunit;
       switchPeriod(s.period || 'daily');
+      return true;  // 저장된 상태 있음 → 자동 조회 트리거용
     } else {
-      switchPeriod('daily'); // 저장 값 없으면 기본 탭
+      switchPeriod('daily');
+      return false;
     }
   } catch {
     switchPeriod('daily');
+    return false;
   }
 }
 
@@ -455,6 +458,7 @@ function renderChart(rows) {
 
 // ── 메인 조회 ────────────────────────────
 async function fetchAndRender() {
+  saveState(); // 조회 시점 조건 항상 저장
   clearUI();
   loadingEl.classList.remove('hidden');
 
@@ -543,5 +547,6 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
 });
 
 // ── 초기화 ───────────────────────────────
-initDates();         // 기본값 먼저 세팅
-restoreState();      // 저장된 조건으로 덮어씌우기 (없으면 무시)
+initDates();                           // 기본값 먼저 세팅
+const hadSavedState = restoreState();  // 저장된 조건으로 덮어씌우기
+if (hadSavedState) fetchAndRender();   // 저장 조건 있으면 자동 조회
