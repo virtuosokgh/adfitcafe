@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>카페 애드핏 수익 대시보드</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span class="title-by">비투스가 만든</span> 카페 애드핏 수익 대시보드</h1>
+      <p class="subtitle">광고 단위명에 <strong>카페</strong> 또는 <strong>테이블</strong>이 포함된 수익만 표시합니다.</p>
+    </header>
+
+    <!-- 기간 타입 탭 -->
+    <div class="period-tabs">
+      <button class="tab-btn active" data-period="daily">일별</button>
+      <button class="tab-btn" data-period="weekly">주별</button>
+      <button class="tab-btn" data-period="monthly">월별</button>
+    </div>
+
+    <!-- 날짜 선택 영역 -->
+    <div class="controls">
+      <div class="date-range" id="date-range-daily">
+        <label>시작일 <input type="date" id="start-date-d" /></label>
+        <span class="dash">~</span>
+        <label>종료일 <input type="date" id="end-date-d" /></label>
+      </div>
+      <div class="date-range hidden" id="date-range-weekly">
+        <label>시작 주 <input type="date" id="start-date-w" /></label>
+        <span class="dash">~</span>
+        <label>종료 주 <input type="date" id="end-date-w" /></label>
+      </div>
+      <div class="date-range hidden" id="date-range-monthly">
+        <label>시작 월 <input type="month" id="start-date-m" /></label>
+        <span class="dash">~</span>
+        <label>종료 월 <input type="month" id="end-date-m" /></label>
+      </div>
+
+      <!-- 광고단위 필터 -->
+      <div class="filter-area">
+        <label for="adunit-filter">광고 단위 필터</label>
+        <select id="adunit-filter">
+          <option value="">전체 광고단위</option>
+        </select>
+      </div>
+
+      <!-- 플랫폼 필터 -->
+      <div class="filter-area">
+        <label for="platform-filter">플랫폼 필터</label>
+        <select id="platform-filter">
+          <option value="">전체 플랫폼</option>
+          <option value="PC Web">PC Web</option>
+          <option value="Mobile Web">Mobile Web</option>
+          <option value="App Ios">App iOS</option>
+          <option value="App Android">App Android</option>
+        </select>
+      </div>
+
+      <button id="search-btn" class="search-btn">조회</button>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div class="summary-cards" id="summary-cards" style="display:none;">
+      <div class="card total">
+        <div class="card-label">총 수익 (적립금)</div>
+        <div class="card-value" id="total-profit">0원</div>
+      </div>
+      <div class="card">
+        <div class="card-label">총 노출 수</div>
+        <div class="card-value" id="total-impression">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">총 클릭 수</div>
+        <div class="card-value" id="total-click">0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">클릭률 (CTR)</div>
+        <div class="card-value" id="total-ctr">0%</div>
+      </div>
+    </div>
+
+    <!-- 플랫폼별 수익 -->
+    <div class="platform-section" id="platform-section" style="display:none;">
+      <h2>플랫폼별 수익</h2>
+      <div class="platform-cards" id="platform-cards"></div>
+    </div>
+
+    <!-- 로딩 / 오류 / 데이터 없음 -->
+    <div id="loading" class="loading hidden">데이터를 불러오는 중...</div>
+    <div id="error-msg" class="error-msg hidden"></div>
+    <div id="empty-msg" class="empty-msg hidden">카페/테이블 광고 단위 데이터가 없습니다.</div>
+
+    <!-- 광고단위별 상세 테이블 -->
+    <div class="table-section" id="table-section" style="display:none;">
+      <div class="table-header-row">
+        <h2>광고단위별 상세</h2>
+        <span id="row-count"></span>
+      </div>
+      <div class="table-wrapper">
+        <table id="result-table">
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>플랫폼 (매체명)</th>
+              <th>광고단위명</th>
+              <th>요청수</th>
+              <th>응답수</th>
+              <th>노출수</th>
+              <th>클릭수</th>
+              <th>CTR</th>
+              <th>수익 (적립금)</th>
+            </tr>
+          </thead>
+          <tbody id="result-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 날짜별 수익 차트 영역 -->
+    <div class="chart-section" id="chart-section" style="display:none;">
+      <h2>날짜별 수익 추이</h2>
+      <canvas id="profit-chart"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

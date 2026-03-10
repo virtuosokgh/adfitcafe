@@ -1,0 +1,402 @@
+/* =========================================
+   기본 리셋 & 변수
+   ========================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --kakao-yellow: #FEE500;
+  --kakao-brown: #3C1E1E;
+  --primary: #1A73E8;
+  --primary-dark: #1558b0;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --border: #E0E4EA;
+  --text: #1A1D23;
+  --text-sub: #6B7280;
+  --success: #10B981;
+  --danger: #EF4444;
+  --radius: 12px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+body {
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* =========================================
+   레이아웃
+   ========================================= */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+/* =========================================
+   헤더
+   ========================================= */
+header {
+  margin-bottom: 28px;
+}
+header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.title-by {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-sub);
+  vertical-align: middle;
+  margin-right: 4px;
+}
+header .subtitle {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-sub);
+}
+header .subtitle strong {
+  color: var(--primary);
+}
+
+/* =========================================
+   기간 탭
+   ========================================= */
+.period-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.tab-btn {
+  padding: 8px 20px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.tab-btn:hover { border-color: var(--primary); color: var(--primary); }
+.tab-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* =========================================
+   컨트롤 영역
+   ========================================= */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.date-range label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+  gap: 4px;
+}
+.date-range input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.18s;
+}
+.date-range input:focus { border-color: var(--primary); }
+.dash { color: var(--text-sub); font-size: 18px; margin-top: 18px; }
+
+.filter-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-area label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+.filter-area select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  cursor: pointer;
+  min-width: 160px;
+  transition: border-color 0.18s;
+}
+.filter-area select:focus { border-color: var(--primary); }
+
+.search-btn {
+  padding: 10px 28px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s;
+  white-space: nowrap;
+}
+.search-btn:hover { background: var(--primary-dark); }
+.search-btn:active { transform: scale(0.97); }
+
+.hidden { display: none !important; }
+
+/* =========================================
+   요약 카드
+   ========================================= */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.card.total {
+  background: linear-gradient(135deg, #1A73E8 0%, #0D47A1 100%);
+  border-color: transparent;
+}
+.card.total .card-label { color: rgba(255,255,255,0.8); }
+.card.total .card-value { color: #fff; }
+.card-label {
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.card-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* =========================================
+   플랫폼별 수익
+   ========================================= */
+.platform-section {
+  margin-bottom: 24px;
+}
+.platform-section h2,
+.table-section h2,
+.chart-section h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+.platform-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.platform-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+}
+.platform-card .p-name {
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.platform-card .p-profit {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.platform-card .p-sub {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+/* =========================================
+   상태 메시지
+   ========================================= */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-sub);
+  font-size: 15px;
+}
+.error-msg {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.empty-msg {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-sub);
+  font-size: 15px;
+}
+
+/* =========================================
+   테이블
+   ========================================= */
+.table-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+.table-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+#row-count {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+.table-wrapper {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+thead th {
+  background: var(--bg);
+  padding: 10px 14px;
+  text-align: right;
+  font-weight: 700;
+  color: var(--text-sub);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+thead th:first-child,
+thead th:nth-child(2),
+thead th:nth-child(3) { text-align: left; }
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+tbody tr:hover { background: #F0F4FF; }
+tbody td {
+  padding: 10px 14px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text);
+}
+tbody td:first-child,
+tbody td:nth-child(2),
+tbody td:nth-child(3) { text-align: left; }
+.profit-cell {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* =========================================
+   차트
+   ========================================= */
+.chart-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+#profit-chart {
+  max-height: 300px;
+}
+
+/* =========================================
+   복사 버튼
+   ========================================= */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.25);
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.copy-btn:hover { opacity: 1; background: rgba(255,255,255,0.5); }
+.copy-btn.copied {
+  opacity: 1;
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.profit-cell {
+  white-space: nowrap;
+}
+.profit-cell-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* =========================================
+   반응형
+   ========================================= */
+@media (max-width: 640px) {
+  header h1 { font-size: 20px; }
+  .controls { padding: 16px; }
+  .card-value { font-size: 22px; }
+  .search-btn { width: 100%; }
+  .table-section { padding: 14px; }
+}
