@@ -463,7 +463,9 @@ function renderChart(rows) {
 
 // ── 메인 조회 ────────────────────────────
 async function fetchAndRender() {
-  saveState(); // 조회 시점 조건 항상 저장
+  // ※ 여기서 saveState()를 호출하면 adunitFilter 옵션이 아직 없어
+  //   adunit: "" 로 덮어써버리는 버그가 발생하므로 호출하지 않음.
+  //   saveState()는 사용자 액션(검색 버튼, 필터 변경 등) 쪽에서 호출.
   clearUI();
   loadingEl.classList.remove('hidden');
 
@@ -593,6 +595,7 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
     sortCol = col;        // 새 컬럼 → 오름차순으로 시작
     sortDir = 1;
   }
+  saveState();  // 정렬 상태를 즉시 localStorage에 저장
   reRender();
 });
 
