@@ -348,17 +348,14 @@ function renderPlatformCards(rows) {
     const ia = ORDER.indexOf(a[0]), ib = ORDER.indexOf(b[0]);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
-  platformCardsEl.innerHTML = '';
-  sorted.forEach(([platform, data]) => {
-    const div = document.createElement('div');
-    div.className = 'platform-card';
-    div.innerHTML = `
+  // 문자열 한 번에 조립 후 innerHTML 1회 할당 (DOM 조작 최소화)
+  platformCardsEl.innerHTML = sorted.map(([platform, data]) => `
+    <div class="platform-card">
       <div class="p-name">${platform}</div>
       <div class="p-profit"><span>${won(data.profit)}</span>${copyBtn(data.profit)}</div>
       <div class="p-sub">노출 ${comma(data.impression)} / 클릭 ${comma(data.click)}</div>
-    `;
-    platformCardsEl.appendChild(div);
-  });
+    </div>
+  `).join('');
   platformSection.style.display = '';
 }
 
@@ -399,14 +396,14 @@ function updateSortHeaders() {
 function renderTable(rows) {
   const sorted = sortRows(rows);
   updateSortHeaders();
-  resultBody.innerHTML = '';
   rowCountEl.textContent = `총 ${sorted.length}건`;
-  sorted.forEach(r => {
+
+  // 문자열 한 번에 조립 후 innerHTML 1회 할당 (행마다 appendChild 하면 리플로우 반복 발생)
+  resultBody.innerHTML = sorted.map(r => {
     const dateLabel = currentPeriod === 'weekly'
       ? (r._weekLabel || '-')
       : formatDate(r.day || r.month);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+    return `<tr>
       <td>${dateLabel}</td>
       <td>${r._platform || r.mediaName || '-'}</td>
       <td>${r.adunitName || '-'}</td>
@@ -416,9 +413,9 @@ function renderTable(rows) {
       <td>${comma(r.click)}</td>
       <td>${pct(r.click, r.impression)}</td>
       <td class="profit-cell"><span class="profit-cell-inner"><span>${won(r.profit)}</span>${copyBtn(r.profit || 0)}</span></td>
-    `;
-    resultBody.appendChild(tr);
-  });
+    </tr>`;
+  }).join('');
+
   tableSection.style.display = '';
 }
 
@@ -435,7 +432,15 @@ function renderChart(rows) {
   const data   = labels.map(l => map.get(l));
 
   chartSection.style.display = '';
-  if (chartInstance) chartInstance.destroy();
+
+  // 이미 Chart 인스턴스가 있으면 destroy 없이 데이터만 교체 (훨씬 빠름)
+  if (chartInstance) {
+    chartInstance.data.labels            = labels;
+    chartInstance.data.datasets[0].data  = data;
+    chartInstance.update('active');  // 애니메이션 유지, 리렌더만
+    return;
+  }
+
   const ctx = document.getElementById('profit-chart').getContext('2d');
   chartInstance = new Chart(ctx, {
     type: 'bar',
@@ -452,6 +457,7 @@ function renderChart(rows) {
     },
     options: {
       responsive: true,
+      animation: { duration: 400 },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => won(ctx.parsed.y) } }
@@ -507,10 +513,15 @@ async function fetchAndRender() {
     let displayRows = applyFilters(rows);
     if (currentPeriod === 'weekly') displayRows = groupByWeek(displayRows);
 
+    // 요약 카드·플랫폼 카드는 가볍기 때문에 즉시 렌더
     renderSummary(displayRows);
     renderPlatformCards(displayRows);
-    renderTable(displayRows);
-    renderChart(displayRows);
+
+    // 테이블·차트는 다음 프레임에 렌더 (메인 스레드 블로킹 최소화 → 요약이 먼저 보임)
+    requestAnimationFrame(() => {
+      renderTable(displayRows);
+      requestAnimationFrame(() => renderChart(displayRows));
+    });
 
   } catch (err) {
     loadingEl.classList.add('hidden');
