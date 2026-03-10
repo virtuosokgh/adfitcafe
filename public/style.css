@@ -337,6 +337,32 @@ thead th {
 thead th:first-child,
 thead th:nth-child(2),
 thead th:nth-child(3) { text-align: left; }
+
+/* 정렬 가능한 헤더 */
+th[data-col] {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+th[data-col]:hover {
+  background: #dde8fd;
+  color: var(--primary);
+}
+th.sorted {
+  background: #dde8fd;
+  color: var(--primary);
+}
+.sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+th[data-col]:hover .sort-icon,
+th.sorted .sort-icon {
+  opacity: 1;
+}
 tbody tr {
   border-bottom: 1px solid var(--border);
   transition: background 0.12s;

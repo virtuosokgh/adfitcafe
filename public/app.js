@@ -7,6 +7,8 @@ let currentPeriod = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let allRows = [];             // 필터 전 원본(카페/테이블만)
 let chartInstance = null;
 const apiCache = new Map();   // API 응답 캐시 (같은 조건 재조회 시 즉시 반환)
+let sortCol = null;           // 현재 정렬 컬럼 키
+let sortDir = 1;              // 1=오름차순, -1=내림차순
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -297,11 +299,46 @@ function renderPlatformCards(rows) {
   platformSection.style.display = '';
 }
 
+// ── 정렬 ─────────────────────────────────
+function getSortValue(row, col) {
+  switch (col) {
+    case 'date':       return currentPeriod === 'weekly' ? (row._weekLabel || '') : (row.day || row.month || '');
+    case 'platform':   return row._platform || '';
+    case 'adunit':     return row.adunitName || '';
+    case 'request':    return row.request    || 0;
+    case 'response':   return row.response   || 0;
+    case 'impression': return row.impression || 0;
+    case 'click':      return row.click      || 0;
+    case 'ctr':        return row.impression ? row.click / row.impression : 0;
+    case 'profit':     return row.profit     || 0;
+    default:           return '';
+  }
+}
+function sortRows(rows) {
+  if (!sortCol) return rows;
+  return [...rows].sort((a, b) => {
+    const va = getSortValue(a, sortCol);
+    const vb = getSortValue(b, sortCol);
+    if (typeof va === 'string') return va.localeCompare(vb) * sortDir;
+    return (va - vb) * sortDir;
+  });
+}
+function updateSortHeaders() {
+  document.querySelectorAll('th[data-col]').forEach(th => {
+    const active = th.dataset.col === sortCol;
+    th.classList.toggle('sorted', active);
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = active ? (sortDir === 1 ? '↑' : '↓') : '↕';
+  });
+}
+
 // ── 테이블 렌더 ─────────────────────────
 function renderTable(rows) {
+  const sorted = sortRows(rows);
+  updateSortHeaders();
   resultBody.innerHTML = '';
-  rowCountEl.textContent = `총 ${rows.length}건`;
-  rows.forEach(r => {
+  rowCountEl.textContent = `총 ${sorted.length}건`;
+  sorted.forEach(r => {
     const dateLabel = currentPeriod === 'weekly'
       ? (r._weekLabel || '-')
       : formatDate(r.day || r.month);
@@ -431,6 +468,20 @@ adunitFilter.addEventListener('change', reRender);
 platformFilter.addEventListener('change', reRender);
 searchBtn.addEventListener('click', fetchAndRender);
 document.addEventListener('keydown', e => { if (e.key === 'Enter') fetchAndRender(); });
+
+// ── 테이블 헤더 정렬 클릭 ─────────────────
+document.querySelector('#result-table thead').addEventListener('click', e => {
+  const th = e.target.closest('th[data-col]');
+  if (!th || allRows.length === 0) return;
+  const col = th.dataset.col;
+  if (sortCol === col) {
+    sortDir *= -1;        // 같은 컬럼 → 방향 반전
+  } else {
+    sortCol = col;        // 새 컬럼 → 오름차순으로 시작
+    sortDir = 1;
+  }
+  reRender();
+});
 
 // ── 초기화 ───────────────────────────────
 initDates();
