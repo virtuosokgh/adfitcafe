@@ -641,22 +641,35 @@ function initFlatpickr() {
     calendarContainer.appendChild(wrap);
   }
 
-  const commonOpts = {
+  const baseOpts = {
     locale:        'ko',
     dateFormat:    'Y-m-d',
     disableMobile: true,
-    onChange:      () => saveState()
   };
 
   fpStart = flatpickr(startDateD, {
-    ...commonOpts,
+    ...baseOpts,
     defaultDate: startDateD.value || daysAgo(30),
+    onChange(selectedDates) {
+      // 시작일이 종료일보다 나중이면 종료일을 시작일에 맞춤
+      if (selectedDates[0] && fpEnd.selectedDates[0] && selectedDates[0] > fpEnd.selectedDates[0]) {
+        fpEnd.setDate(selectedDates[0], false); // false: 재귀 onChange 방지
+      }
+      saveState();
+    },
     onReady(_, __, fp) { addShortcuts(fp.calendarContainer, fp, true); }
   });
 
   fpEnd = flatpickr(endDateD, {
-    ...commonOpts,
+    ...baseOpts,
     defaultDate: endDateD.value || today(),
+    onChange(selectedDates) {
+      // 종료일이 시작일보다 이전이면 시작일을 종료일에 맞춤
+      if (selectedDates[0] && fpStart.selectedDates[0] && selectedDates[0] < fpStart.selectedDates[0]) {
+        fpStart.setDate(selectedDates[0], false); // false: 재귀 onChange 방지
+      }
+      saveState();
+    },
     onReady(_, __, fp) { addShortcuts(fp.calendarContainer, fp, false); }
   });
 }
