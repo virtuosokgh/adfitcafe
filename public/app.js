@@ -612,15 +612,18 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
 
 // ── Flatpickr 초기화 (일별 날짜 입력 캘린더 안 버튼) ──
 function initFlatpickr() {
-  function addShortcuts(calendarContainer) {
+  // fp       : 이 캘린더의 Flatpickr 인스턴스
+  // isStart  : 시작일 캘린더면 true, 종료일 캘린더면 false
+  function addShortcuts(calendarContainer, fp, isStart) {
     const wrap = document.createElement('div');
     wrap.className = 'fp-quick-btns';
     const shortcuts = [
-      { label: '오늘',      fn: () => { const t = today();    fpStart.setDate(t, true);       fpEnd.setDate(t, true); } },
-      { label: '어제',      fn: () => { const d = daysAgo(1); fpStart.setDate(d, true);       fpEnd.setDate(d, true); } },
-      { label: '그저께',    fn: () => { const d = daysAgo(2); fpStart.setDate(d, true);       fpEnd.setDate(d, true); } },
-      { label: '최근 7일',  fn: () => { fpStart.setDate(daysAgo(6),  true); fpEnd.setDate(today(), true); } },
-      { label: '최근 30일', fn: () => { fpStart.setDate(daysAgo(29), true); fpEnd.setDate(today(), true); } },
+      { label: '오늘',      fn: () => fp.setDate(today(),    true) },
+      { label: '어제',      fn: () => fp.setDate(daysAgo(1), true) },
+      { label: '그저께',    fn: () => fp.setDate(daysAgo(2), true) },
+      // 범위 버튼: 시작일 캘린더에선 "from" 날짜, 종료일 캘린더에선 오늘(to)로 설정
+      { label: '최근 7일',  fn: () => fp.setDate(isStart ? daysAgo(6)  : today(), true) },
+      { label: '최근 30일', fn: () => fp.setDate(isStart ? daysAgo(29) : today(), true) },
     ];
     shortcuts.forEach(({ label, fn }) => {
       const btn = document.createElement('button');
@@ -630,8 +633,7 @@ function initFlatpickr() {
       btn.addEventListener('mousedown', e => {
         e.preventDefault();   // 포커스 이동 막아 캘린더 유지
         fn();
-        fpStart.close();
-        fpEnd.close();
+        fp.close();           // 이 캘린더만 닫기
         saveState();
       });
       wrap.appendChild(btn);
@@ -649,13 +651,13 @@ function initFlatpickr() {
   fpStart = flatpickr(startDateD, {
     ...commonOpts,
     defaultDate: startDateD.value || daysAgo(30),
-    onReady(_, __, fp) { addShortcuts(fp.calendarContainer); }
+    onReady(_, __, fp) { addShortcuts(fp.calendarContainer, fp, true); }
   });
 
   fpEnd = flatpickr(endDateD, {
     ...commonOpts,
     defaultDate: endDateD.value || today(),
-    onReady(_, __, fp) { addShortcuts(fp.calendarContainer); }
+    onReady(_, __, fp) { addShortcuts(fp.calendarContainer, fp, false); }
   });
 }
 
