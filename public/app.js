@@ -9,6 +9,7 @@ let chartInstance = null;
 const apiCache = new Map();   // API 응답 캐시 (같은 조건 재조회 시 즉시 반환)
 let sortCol = null;           // 현재 정렬 컬럼 키
 let sortDir = 1;              // 1=오름차순, -1=내림차순
+let pendingAdunit = '';       // 새로고침 복원용 광고단위 임시 저장
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -152,6 +153,44 @@ function initDates() {
   endDateM.value   = t.slice(0, 7);
 }
 
+// ── 조건 저장 / 복원 (localStorage) ─────────
+const STATE_KEY = 'adfit_state';
+
+function saveState() {
+  localStorage.setItem(STATE_KEY, JSON.stringify({
+    period:   currentPeriod,
+    startD:   startDateD.value,
+    endD:     endDateD.value,
+    startW:   startDateW.value,
+    endW:     endDateW.value,
+    startM:   startDateM.value,
+    endM:     endDateM.value,
+    adunit:   adunitFilter.value,
+    platform: platformFilter.value
+  }));
+}
+
+function restoreState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    if (s) {
+      if (s.startD)   startDateD.value     = s.startD;
+      if (s.endD)     endDateD.value       = s.endD;
+      if (s.startW)   startDateW.value     = s.startW;
+      if (s.endW)     endDateW.value       = s.endW;
+      if (s.startM)   startDateM.value     = s.startM;
+      if (s.endM)     endDateM.value       = s.endM;
+      if (s.platform) platformFilter.value = s.platform;
+      if (s.adunit)   pendingAdunit        = s.adunit;
+      switchPeriod(s.period || 'daily');
+    } else {
+      switchPeriod('daily'); // 저장 값 없으면 기본 탭
+    }
+  } catch {
+    switchPeriod('daily');
+  }
+}
+
 // ── 탭 전환 ──────────────────────────────
 function switchPeriod(period) {
   currentPeriod = period;
@@ -160,7 +199,10 @@ function switchPeriod(period) {
     document.getElementById(id).classList.toggle('hidden', p !== period);
   });
 }
-tabBtns.forEach(btn => btn.addEventListener('click', () => switchPeriod(btn.dataset.period)));
+tabBtns.forEach(btn => btn.addEventListener('click', () => {
+  switchPeriod(btn.dataset.period);
+  saveState();
+}));
 
 // ── 검색 파라미터 수집 ────────────────────
 function getSearchParams() {
@@ -196,7 +238,9 @@ function showError(msg) {
 // ── 광고단위 필터 옵션 업데이트 ────────────
 function updateAdunitFilter(rows) {
   const names = [...new Set(rows.map(r => r.adunitName).filter(Boolean))].sort();
-  const current = adunitFilter.value;
+  // pendingAdunit: 새로고침 복원값 우선, 없으면 현재 선택값 유지
+  const current = pendingAdunit || adunitFilter.value;
+  pendingAdunit = '';
   adunitFilter.innerHTML = '<option value="">전체 광고단위</option>';
   names.forEach(name => {
     const opt = document.createElement('option');
@@ -257,15 +301,26 @@ document.addEventListener('click', e => {
 });
 
 // ── 요약 카드 렌더 ───────────────────────
+function rpmFmt(n) {
+  // 소수 둘째자리, 천단위 콤마
+  return Number(n).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '원';
+}
+
 function renderSummary(rows) {
   const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
   const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
   const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
-  const ctrNum = imp ? ((clk / imp) * 100).toFixed(2) : '0.00';
+  const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
+  const ctrNum    = imp ? ((clk / imp) * 100).toFixed(2)   : '0.00';
+  const impRpmNum = imp ? ((profit / imp) * 1000).toFixed(2) : '0.00';
+  const reqRpmNum = req ? ((profit / req) * 1000).toFixed(2) : '0.00';
+
   totalProfit.innerHTML     = `<span>${won(profit)}</span>${copyBtn(profit)}`;
   totalImpression.innerHTML = `<span>${comma(imp)}</span>${copyBtn(imp)}`;
   totalClick.innerHTML      = `<span>${comma(clk)}</span>${copyBtn(clk)}`;
   totalCtr.innerHTML        = `<span>${ctrNum}%</span>${copyBtn(ctrNum)}`;
+  document.getElementById('total-imp-rpm').innerHTML = `<span>${rpmFmt(impRpmNum)}</span>${copyBtn(impRpmNum)}`;
+  document.getElementById('total-req-rpm').innerHTML = `<span>${rpmFmt(reqRpmNum)}</span>${copyBtn(reqRpmNum)}`;
   summaryCards.style.display = '';
 }
 
@@ -464,10 +519,14 @@ function reRender() {
   renderChart(displayRows);
 }
 
-adunitFilter.addEventListener('change', reRender);
-platformFilter.addEventListener('change', reRender);
-searchBtn.addEventListener('click', fetchAndRender);
-document.addEventListener('keydown', e => { if (e.key === 'Enter') fetchAndRender(); });
+adunitFilter.addEventListener('change', () => { saveState(); reRender(); });
+platformFilter.addEventListener('change', () => { saveState(); reRender(); });
+searchBtn.addEventListener('click', () => { saveState(); fetchAndRender(); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter') { saveState(); fetchAndRender(); } });
+
+// 날짜 변경 시에도 저장
+[startDateD, endDateD, startDateW, endDateW, startDateM, endDateM]
+  .forEach(el => el.addEventListener('change', saveState));
 
 // ── 테이블 헤더 정렬 클릭 ─────────────────
 document.querySelector('#result-table thead').addEventListener('click', e => {
@@ -484,5 +543,5 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
 });
 
 // ── 초기화 ───────────────────────────────
-initDates();
-switchPeriod('daily');
+initDates();         // 기본값 먼저 세팅
+restoreState();      // 저장된 조건으로 덮어씌우기 (없으면 무시)
