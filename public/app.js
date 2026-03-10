@@ -166,7 +166,9 @@ function saveState() {
     startM:   startDateM.value,
     endM:     endDateM.value,
     adunit:   adunitFilter.value,
-    platform: platformFilter.value
+    platform: platformFilter.value,
+    sortCol:  sortCol,
+    sortDir:  sortDir
   }));
 }
 
@@ -182,6 +184,7 @@ function restoreState() {
       if (s.endM)     endDateM.value       = s.endM;
       if (s.platform) platformFilter.value = s.platform;
       if (s.adunit)   pendingAdunit        = s.adunit;
+      if (s.sortCol)  { sortCol = s.sortCol; sortDir = s.sortDir || 1; }
       switchPeriod(s.period || 'daily');
       return true;  // 저장된 상태 있음 → 자동 조회 트리거용
     } else {
@@ -531,6 +534,51 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter') { saveState()
 // 날짜 변경 시에도 저장
 [startDateD, endDateD, startDateW, endDateW, startDateM, endDateM]
   .forEach(el => el.addEventListener('change', saveState));
+
+// ── 빠른 날짜 선택 버튼 ──────────────────
+document.querySelectorAll('.quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const t = today();
+    switch (btn.dataset.quick) {
+      // 일별
+      case 'today':
+        startDateD.value = t; endDateD.value = t; break;
+      case 'yesterday':
+        startDateD.value = daysAgo(1); endDateD.value = daysAgo(1); break;
+      case '2daysago':
+        startDateD.value = daysAgo(2); endDateD.value = daysAgo(2); break;
+      case 'last7':
+        startDateD.value = daysAgo(6); endDateD.value = t; break;
+      case 'last30':
+        startDateD.value = daysAgo(29); endDateD.value = t; break;
+      // 주별
+      case 'thisweek':
+        startDateW.value = dateToWeekInput(t);
+        endDateW.value   = dateToWeekInput(t); break;
+      case 'lastweek':
+        startDateW.value = dateToWeekInput(daysAgo(7));
+        endDateW.value   = dateToWeekInput(daysAgo(7)); break;
+      case 'last4weeks':
+        startDateW.value = dateToWeekInput(daysAgo(27));
+        endDateW.value   = dateToWeekInput(t); break;
+      // 월별
+      case 'thismonth':
+        startDateM.value = t.slice(0, 7);
+        endDateM.value   = t.slice(0, 7); break;
+      case 'lastmonth': {
+        const d = new Date(); d.setMonth(d.getMonth() - 1);
+        const m = d.toISOString().slice(0, 7);
+        startDateM.value = m; endDateM.value = m; break;
+      }
+      case 'last3months': {
+        const d = new Date(); d.setMonth(d.getMonth() - 2);
+        startDateM.value = d.toISOString().slice(0, 7);
+        endDateM.value   = t.slice(0, 7); break;
+      }
+    }
+    saveState();
+  });
+});
 
 // ── 테이블 헤더 정렬 클릭 ─────────────────
 document.querySelector('#result-table thead').addEventListener('click', e => {

@@ -132,6 +132,32 @@ header .subtitle strong {
 .date-range input:focus { border-color: var(--primary); }
 .dash { color: var(--text-sub); font-size: 18px; margin-top: 18px; }
 
+/* 빠른 날짜 선택 버튼 */
+.quick-btns {
+  flex-basis: 100%;   /* flex-wrap 이용해 다음 줄로 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.quick-btn {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.quick-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #EEF4FF;
+}
+.quick-btn:active { transform: scale(0.95); }
+
 .filter-area {
   display: flex;
   flex-direction: column;

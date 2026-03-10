@@ -26,16 +26,33 @@
         <label>시작일 <input type="date" id="start-date-d" /></label>
         <span class="dash">~</span>
         <label>종료일 <input type="date" id="end-date-d" /></label>
+        <div class="quick-btns">
+          <button class="quick-btn" data-quick="today">오늘</button>
+          <button class="quick-btn" data-quick="yesterday">어제</button>
+          <button class="quick-btn" data-quick="2daysago">그저께</button>
+          <button class="quick-btn" data-quick="last7">최근 7일</button>
+          <button class="quick-btn" data-quick="last30">최근 30일</button>
+        </div>
       </div>
       <div class="date-range hidden" id="date-range-weekly">
         <label>시작 주 <input type="week" id="start-date-w" /></label>
         <span class="dash">~</span>
         <label>종료 주 <input type="week" id="end-date-w" /></label>
+        <div class="quick-btns">
+          <button class="quick-btn" data-quick="thisweek">이번 주</button>
+          <button class="quick-btn" data-quick="lastweek">지난 주</button>
+          <button class="quick-btn" data-quick="last4weeks">최근 4주</button>
+        </div>
       </div>
       <div class="date-range hidden" id="date-range-monthly">
         <label>시작 월 <input type="month" id="start-date-m" /></label>
         <span class="dash">~</span>
         <label>종료 월 <input type="month" id="end-date-m" /></label>
+        <div class="quick-btns">
+          <button class="quick-btn" data-quick="thismonth">이번 달</button>
+          <button class="quick-btn" data-quick="lastmonth">지난 달</button>
+          <button class="quick-btn" data-quick="last3months">최근 3개월</button>
+        </div>
       </div>
 
       <!-- 광고단위 필터 -->
