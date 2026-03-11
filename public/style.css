@@ -419,17 +419,30 @@ header .subtitle strong {
 }
 table {
   width: 100%;
+  min-width: 820px;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
+  table-layout: fixed;
 }
+/* 컬럼 너비 고정 (광고단위명은 나머지 공간 자동 분배) */
+#result-table th:nth-child(1), #result-table td:nth-child(1) { width: 92px; }
+#result-table th:nth-child(2), #result-table td:nth-child(2) { width: 140px; }
+#result-table th:nth-child(4), #result-table td:nth-child(4) { width: 82px; }
+#result-table th:nth-child(5), #result-table td:nth-child(5) { width: 82px; }
+#result-table th:nth-child(6), #result-table td:nth-child(6) { width: 72px; }
+#result-table th:nth-child(7), #result-table td:nth-child(7) { width: 62px; }
+#result-table th:nth-child(8), #result-table td:nth-child(8) { width: 62px; }
+#result-table th:nth-child(9), #result-table td:nth-child(9) { width: 120px; }
 thead th {
   background: var(--bg);
-  padding: 10px 14px;
+  padding: 8px 10px;
   text-align: right;
   font-weight: 700;
   color: var(--text-sub);
   border-bottom: 2px solid var(--border);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 thead th:first-child,
 thead th:nth-child(2),
@@ -466,9 +479,11 @@ tbody tr {
 }
 tbody tr:hover { background: #F0F4FF; }
 tbody td {
-  padding: 10px 14px;
+  padding: 8px 10px;
   text-align: right;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text);
 }
 tbody td:first-child,

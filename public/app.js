@@ -419,8 +419,8 @@ function renderTable(rows) {
       : formatDate(r.day || r.month);
     return `<tr>
       <td>${dateLabel}</td>
-      <td>${r.adunitId || '-'}</td>
-      <td>${r.adunitName || '-'}</td>
+      <td title="${r.adunitId || ''}">${r.adunitId || '-'}</td>
+      <td title="${r.adunitName || ''}">${r.adunitName || '-'}</td>
       <td>${comma(r.request)}</td>
       <td>${comma(r.response)}</td>
       <td>${comma(r.impression)}</td>
