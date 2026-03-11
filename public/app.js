@@ -302,7 +302,8 @@ function applyFilters(rows) {
   const platform = platformFilter.value;
   if (adunit)   result = result.filter(r => r.adunitName === adunit);
   if (adunitId) result = result.filter(r => r.adunitId   === adunitId);
-  if (platform) result = result.filter(r => r._platform  === platform);
+  if (platform === 'App 전체') result = result.filter(r => r._platform === 'App iOS' || r._platform === 'App Android');
+  else if (platform) result = result.filter(r => r._platform === platform);
   return result;
 }
 
