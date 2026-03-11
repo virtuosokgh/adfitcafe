@@ -52,6 +52,13 @@ function monthsAgo(n) {
   d.setMonth(d.getMonth() - n);
   return d.toISOString().slice(0, 10);
 }
+// 날짜 문자열(YYYY-MM-DD)이 속한 달의 1일/말일 반환 (UTC 기반, timezone 안전)
+function monthRange(dateStr) {
+  const [year, month] = dateStr.slice(0, 7).split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate(); // 다음 달 day0 = 이번 달 말일
+  const pad = n => String(n).padStart(2, '0');
+  return { start: `${year}-${pad(month)}-01`, end: `${year}-${pad(month)}-${pad(lastDay)}` };
+}
 function toYYYYMMDD(dateStr) { return dateStr.replace(/-/g, ''); }
 function formatDate(raw) {
   if (raw && raw.length === 8) return `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}`;
@@ -136,13 +143,13 @@ function initDates() {
   startDateD.value = daysAgo(30);
   endDateD.value   = t;
 
-  // 주별: 최근 4주 (Flatpickr가 YYYY-MM-DD 형식을 사용)
-  startDateW.value = daysAgo(27);
-  endDateW.value   = t;
+  // 주별: 최근 4주 (월~일 경계로 스냅)
+  startDateW.value = getWeekRange(daysAgo(27)).start;
+  endDateW.value   = getWeekRange(t).end;
 
-  // 월별: 최근 3개월 (Flatpickr가 YYYY-MM-DD 형식을 사용)
-  startDateM.value = monthsAgo(2);
-  endDateM.value   = t;
+  // 월별: 최근 3개월 (1일~말일 경계로 스냅)
+  startDateM.value = monthRange(monthsAgo(2)).start;
+  endDateM.value   = monthRange(t).end;
 }
 
 // ── 조건 저장 / 복원 (localStorage) ─────────
@@ -172,13 +179,25 @@ function restoreState() {
       if (s.startD) startDateD.value = s.startD;
       if (s.endD)   endDateD.value   = s.endD;
 
-      // 주별: 구버전 "YYYY-Www" 포맷 하위 호환
-      if (s.startW) startDateW.value = s.startW.includes('-W') ? weekInputToRange(s.startW).start : s.startW;
-      if (s.endW)   endDateW.value   = s.endW.includes('-W')   ? weekInputToRange(s.endW).end     : s.endW;
+      // 주별: 구버전 "YYYY-Www" 포맷 하위 호환 + 월~일 경계 스냅
+      if (s.startW) {
+        const d = s.startW.includes('-W') ? weekInputToRange(s.startW).start : s.startW;
+        startDateW.value = getWeekRange(d).start;
+      }
+      if (s.endW) {
+        const d = s.endW.includes('-W') ? weekInputToRange(s.endW).end : s.endW;
+        endDateW.value = getWeekRange(d).end;
+      }
 
-      // 월별: 구버전 "YYYY-MM" 포맷 하위 호환
-      if (s.startM) startDateM.value = s.startM.length === 7 ? s.startM + '-01' : s.startM;
-      if (s.endM)   endDateM.value   = s.endM.length   === 7 ? s.endM   + '-01' : s.endM;
+      // 월별: 구버전 "YYYY-MM" 포맷 하위 호환 + 말일 보정
+      if (s.startM) {
+        const d = s.startM.length === 7 ? s.startM + '-01' : s.startM;
+        startDateM.value = monthRange(d).start;
+      }
+      if (s.endM) {
+        const d = s.endM.length === 7 ? s.endM + '-01' : s.endM;
+        endDateM.value = monthRange(d).end;
+      }
 
       if (s.platform)  platformFilter.value = s.platform;  // 정적 옵션이므로 바로 복원
       if (s.adunit)    pendingAdunit         = s.adunit;    // 동적 옵션: 조회 후 복원
@@ -695,6 +714,7 @@ function initFlatpickr() {
   // fp      : 이 캘린더의 Flatpickr 인스턴스
   // isStart : 시작 캘린더면 true, 종료 캘린더면 false
   // shortcuts: [{ label, startDate, endDate }] 배열
+  // 단일 피커용 퀵버튼 (일별)
   function addShortcuts(calendarContainer, fp, shortcuts) {
     const wrap = document.createElement('div');
     wrap.className = 'fp-quick-btns';
@@ -708,6 +728,24 @@ function initFlatpickr() {
         fp.setDate(getDate(), true);
         fp.close();
         saveState();
+      });
+      wrap.appendChild(btn);
+    });
+    calendarContainer.appendChild(wrap);
+  }
+
+  // 양쪽 피커 동시 제어 퀵버튼 (주별·월별)
+  function addPairedShortcuts(calendarContainer, shortcuts) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-quick-btns';
+    shortcuts.forEach(({ label, action }) => {
+      const btn = document.createElement('button');
+      btn.type        = 'button';
+      btn.className   = 'fp-quick-btn';
+      btn.textContent = label;
+      btn.addEventListener('mousedown', e => {
+        e.preventDefault();
+        action();
       });
       wrap.appendChild(btn);
     });
@@ -758,77 +796,77 @@ function initFlatpickr() {
   });
 
   // ─── 주별 ──────────────────────────────
+  // 날짜 선택 시 해당 주 월~일 전체 자동 세팅
+  const weeklyShortcuts = [
+    { label: '이번 주',  action() { const r = getWeekRange(today());    fpStartW.setDate(r.start, false); fpEndW.setDate(r.end, false); saveState(); } },
+    { label: '지난 주',  action() { const r = getWeekRange(daysAgo(7)); fpStartW.setDate(r.start, false); fpEndW.setDate(r.end, false); saveState(); } },
+    { label: '최근 4주', action() { fpStartW.setDate(getWeekRange(daysAgo(27)).start, false); fpEndW.setDate(getWeekRange(today()).end, false); saveState(); } },
+  ];
+
   fpStartW = flatpickr(startDateW, {
     ...baseOpts,
-    defaultDate: startDateW.value || daysAgo(27),
+    defaultDate: startDateW.value || getWeekRange(daysAgo(27)).start,
     onChange(selectedDates) {
-      if (selectedDates[0] && fpEndW.selectedDates[0] && selectedDates[0] > fpEndW.selectedDates[0]) {
-        fpEndW.setDate(selectedDates[0], false);
-      }
+      if (!selectedDates[0]) { saveState(); return; }
+      const r = getWeekRange(selectedDates[0].toISOString().slice(0, 10));
+      fpStartW.setDate(r.start, false);  // 시작일 → 해당 주 월요일
+      fpEndW.setDate(r.end, false);      // 종료일 → 해당 주 일요일
       saveState();
     },
-    onReady(_, __, fp) {
-      addShortcuts(fp.calendarContainer, fp, [
-        { label: '이번 주',  getDate: () => today() },
-        { label: '지난 주',  getDate: () => daysAgo(7) },
-        { label: '최근 4주', getDate: () => daysAgo(27) },
-      ]);
-    }
+    onReady(_, __, fp) { addPairedShortcuts(fp.calendarContainer, weeklyShortcuts); }
   });
 
   fpEndW = flatpickr(endDateW, {
     ...baseOpts,
-    defaultDate: endDateW.value || today(),
+    defaultDate: endDateW.value || getWeekRange(today()).end,
     onChange(selectedDates) {
-      if (selectedDates[0] && fpStartW.selectedDates[0] && selectedDates[0] < fpStartW.selectedDates[0]) {
-        fpStartW.setDate(selectedDates[0], false);
+      if (!selectedDates[0]) { saveState(); return; }
+      const r = getWeekRange(selectedDates[0].toISOString().slice(0, 10));
+      fpEndW.setDate(r.end, false);      // 종료일 → 해당 주 일요일
+      // 종료 주 일요일이 시작일보다 이전이면 시작도 해당 주로 이동
+      if (fpStartW.selectedDates[0] && new Date(r.end) < fpStartW.selectedDates[0]) {
+        fpStartW.setDate(r.start, false);
       }
       saveState();
     },
-    onReady(_, __, fp) {
-      addShortcuts(fp.calendarContainer, fp, [
-        { label: '이번 주',  getDate: () => today() },
-        { label: '지난 주',  getDate: () => daysAgo(7) },
-        { label: '최근 4주', getDate: () => today() },
-      ]);
-    }
+    onReady(_, __, fp) { addPairedShortcuts(fp.calendarContainer, weeklyShortcuts); }
   });
 
   // ─── 월별 ──────────────────────────────
+  // 날짜 선택 시 해당 월의 1일~말일 전체 자동 세팅
+  const monthlyShortcuts = [
+    { label: '이번 달',    action() { const r = monthRange(today());       fpStartM.setDate(r.start, false); fpEndM.setDate(r.end, false); saveState(); } },
+    { label: '지난 달',    action() { const r = monthRange(monthsAgo(1));  fpStartM.setDate(r.start, false); fpEndM.setDate(r.end, false); saveState(); } },
+    { label: '최근 3개월', action() { fpStartM.setDate(monthRange(monthsAgo(2)).start, false); fpEndM.setDate(monthRange(today()).end, false); saveState(); } },
+  ];
+
   fpStartM = flatpickr(startDateM, {
     ...baseOpts,
-    defaultDate: startDateM.value || monthsAgo(2),
+    defaultDate: startDateM.value || monthRange(monthsAgo(2)).start,
     onChange(selectedDates) {
-      if (selectedDates[0] && fpEndM.selectedDates[0] && selectedDates[0] > fpEndM.selectedDates[0]) {
-        fpEndM.setDate(selectedDates[0], false);
-      }
+      if (!selectedDates[0]) { saveState(); return; }
+      const r = monthRange(selectedDates[0].toISOString().slice(0, 10));
+      fpStartM.setDate(r.start, false);  // 시작일 → 해당 월 1일
+      fpEndM.setDate(r.end, false);      // 종료일 → 해당 월 말일
       saveState();
     },
-    onReady(_, __, fp) {
-      addShortcuts(fp.calendarContainer, fp, [
-        { label: '이번 달',    getDate: () => today() },
-        { label: '지난 달',    getDate: () => monthsAgo(1) },
-        { label: '최근 3개월', getDate: () => monthsAgo(2) },
-      ]);
-    }
+    onReady(_, __, fp) { addPairedShortcuts(fp.calendarContainer, monthlyShortcuts); }
   });
 
   fpEndM = flatpickr(endDateM, {
     ...baseOpts,
-    defaultDate: endDateM.value || today(),
+    defaultDate: endDateM.value || monthRange(today()).end,
     onChange(selectedDates) {
-      if (selectedDates[0] && fpStartM.selectedDates[0] && selectedDates[0] < fpStartM.selectedDates[0]) {
-        fpStartM.setDate(selectedDates[0], false);
+      if (!selectedDates[0]) { saveState(); return; }
+      const r = monthRange(selectedDates[0].toISOString().slice(0, 10));
+      fpEndM.setDate(r.end, false);      // 종료일 → 해당 월 말일
+      // 종료 월 말일이 시작일보다 이전이면 시작도 해당 월로 이동
+      if (fpStartM.selectedDates[0] && new Date(r.end) < fpStartM.selectedDates[0]) {
+        fpStartM.setDate(r.start, false);
       }
       saveState();
     },
-    onReady(_, __, fp) {
-      addShortcuts(fp.calendarContainer, fp, [
-        { label: '이번 달',    getDate: () => today() },
-        { label: '지난 달',    getDate: () => monthsAgo(1) },
-        { label: '최근 3개월', getDate: () => today() },
-      ]);
-    }
+    onReady(_, __, fp) { addPairedShortcuts(fp.calendarContainer, monthlyShortcuts); }
   });
 }
 
