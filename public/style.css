@@ -621,3 +621,127 @@ tbody td:nth-child(3) { text-align: left; }
   .search-btn { width: 100%; }
   .table-section { padding: 14px; }
 }
+
+/* =========================================
+   플랫폼 네비게이션 (최상단)
+   ========================================= */
+.platform-nav {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  width: fit-content;
+  box-shadow: var(--shadow);
+}
+.pnav-btn {
+  padding: 10px 28px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.pnav-btn:hover { color: var(--text); }
+.pnav-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* =========================================
+   네이버 CSV 업로드 영역
+   ========================================= */
+.naver-upload-zone {
+  position: relative;
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 56px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.naver-upload-zone:hover,
+.naver-upload-zone.drag-over {
+  border-color: var(--primary);
+  background: #EEF4FF;
+}
+.naver-upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.naver-upload-inner {
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.naver-upload-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 4px;
+}
+.naver-upload-sub {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+/* 파일 정보 바 */
+.naver-file-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #EEF4FF;
+  border: 1px solid #c7d9fb;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 16px;
+}
+.naver-file-reset {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.naver-file-reset:hover { background: #dde8fd; color: var(--danger); }
+
+/* =========================================
+   네이버 테이블 컬럼 너비
+   ========================================= */
+#naver-result-table {
+  min-width: 1040px;
+  table-layout: fixed;
+}
+#naver-result-table th:nth-child(1),  #naver-result-table td:nth-child(1)  { width: 100px; }
+#naver-result-table th:nth-child(2),  #naver-result-table td:nth-child(2)  { width: 180px; }
+/* 3번(매체): 나머지 공간 자동 */
+#naver-result-table th:nth-child(4),  #naver-result-table td:nth-child(4)  { width: 78px; }
+#naver-result-table th:nth-child(5),  #naver-result-table td:nth-child(5)  { width: 78px; }
+#naver-result-table th:nth-child(6),  #naver-result-table td:nth-child(6)  { width: 68px; }
+#naver-result-table th:nth-child(7),  #naver-result-table td:nth-child(7)  { width: 60px; }
+#naver-result-table th:nth-child(8),  #naver-result-table td:nth-child(8)  { width: 78px; }
+#naver-result-table th:nth-child(9),  #naver-result-table td:nth-child(9)  { width: 78px; }
+#naver-result-table th:nth-child(10), #naver-result-table td:nth-child(10) { width: 104px; }
+#naver-result-table th:nth-child(11), #naver-result-table td:nth-child(11) { width: 60px; }

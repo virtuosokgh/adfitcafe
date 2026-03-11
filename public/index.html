@@ -3,160 +3,302 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>카페 애드핏 수익 대시보드</title>
+  <title>카페 수익 대시보드</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1><span class="title-by">비투스가 만든</span> 카페 애드핏 수익 대시보드</h1>
-      <p class="subtitle">광고 단위명에 <strong>카페</strong> 또는 <strong>테이블</strong>이 포함된 수익만 표시합니다.</p>
-    </header>
 
-    <!-- 기간 타입 탭 -->
-    <div class="period-tabs">
-      <button class="tab-btn active" data-period="daily">일별</button>
-      <button class="tab-btn" data-period="weekly">주별</button>
-      <button class="tab-btn" data-period="monthly">월별</button>
+    <!-- ▶ 최상단 플랫폼 네비게이션 -->
+    <div class="platform-nav">
+      <button class="pnav-btn active" data-pnav="adfit">🟡 카카오 애드핏</button>
+      <button class="pnav-btn" data-pnav="naver">🟢 네이버</button>
     </div>
 
-    <!-- 날짜 선택 영역 -->
-    <div class="controls">
-      <!-- 일별: Flatpickr text 입력 -->
-      <div class="date-range" id="date-range-daily">
-        <label>시작일 <input type="text" id="start-date-d" placeholder="날짜 선택" readonly /></label>
-        <span class="dash">~</span>
-        <label>종료일 <input type="text" id="end-date-d" placeholder="날짜 선택" readonly /></label>
+    <!-- ========== 카카오 애드핏 섹션 ========== -->
+    <div id="adfit-section">
+      <header>
+        <h1><span class="title-by">비투스가 만든</span> 카페 애드핏 수익 대시보드</h1>
+        <p class="subtitle">광고 단위명에 <strong>카페</strong> 또는 <strong>테이블</strong>이 포함된 수익만 표시합니다.</p>
+      </header>
+
+      <!-- 기간 타입 탭 -->
+      <div class="period-tabs">
+        <button class="tab-btn active" data-period="daily">일별</button>
+        <button class="tab-btn" data-period="weekly">주별</button>
+        <button class="tab-btn" data-period="monthly">월별</button>
       </div>
 
-      <!-- 주별: Flatpickr text 입력 (빠른 선택 버튼은 캘린더 안에) -->
-      <div class="date-range hidden" id="date-range-weekly">
-        <label>시작 주 <input type="text" id="start-date-w" placeholder="날짜 선택" readonly /></label>
-        <span class="dash">~</span>
-        <label>종료 주 <input type="text" id="end-date-w" placeholder="날짜 선택" readonly /></label>
-      </div>
-
-      <!-- 월별: Flatpickr text 입력 (빠른 선택 버튼은 캘린더 안에) -->
-      <div class="date-range hidden" id="date-range-monthly">
-        <label>시작 월 <input type="text" id="start-date-m" placeholder="날짜 선택" readonly /></label>
-        <span class="dash">~</span>
-        <label>종료 월 <input type="text" id="end-date-m" placeholder="날짜 선택" readonly /></label>
-      </div>
-
-      <!-- 필터 영역 (한 줄) -->
-      <div class="filter-row">
-        <div class="filter-area">
-          <label for="adunit-filter">광고단위명</label>
-          <select id="adunit-filter">
-            <option value="">전체 광고단위명</option>
-          </select>
+      <!-- 날짜 선택 영역 -->
+      <div class="controls">
+        <div class="date-range" id="date-range-daily">
+          <label>시작일 <input type="text" id="start-date-d" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료일 <input type="text" id="end-date-d" placeholder="날짜 선택" readonly /></label>
         </div>
 
-        <div class="filter-area">
-          <label for="adunit-id-filter">광고단위 ID</label>
-          <select id="adunit-id-filter">
-            <option value="">전체 광고단위 ID</option>
-          </select>
+        <div class="date-range hidden" id="date-range-weekly">
+          <label>시작 주 <input type="text" id="start-date-w" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 주 <input type="text" id="end-date-w" placeholder="날짜 선택" readonly /></label>
         </div>
 
-        <div class="filter-area">
-          <label for="platform-filter">플랫폼</label>
-          <select id="platform-filter">
-            <option value="">전체 플랫폼</option>
-            <option value="PC Web">PC Web</option>
-            <option value="Mobile Web">Mobile Web</option>
-            <option value="App iOS">App iOS</option>
-            <option value="App Android">App Android</option>
-          </select>
+        <div class="date-range hidden" id="date-range-monthly">
+          <label>시작 월 <input type="text" id="start-date-m" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 월 <input type="text" id="end-date-m" placeholder="날짜 선택" readonly /></label>
         </div>
 
-        <button id="search-btn" class="search-btn">조회</button>
-      </div>
-    </div>
-
-    <!-- 요약 카드 -->
-    <div class="summary-cards" id="summary-cards" style="display:none;">
-      <div class="card total">
-        <div class="card-label">총 수익 (적립금)</div>
-        <div class="card-value" id="total-profit">0원</div>
-      </div>
-      <div class="card">
-        <div class="card-label">총 노출 수</div>
-        <div class="card-value" id="total-impression">0</div>
-      </div>
-      <div class="card">
-        <div class="card-label">총 클릭 수</div>
-        <div class="card-value" id="total-click">0</div>
-      </div>
-      <div class="card">
-        <div class="card-label">클릭률 (CTR)</div>
-        <div class="card-value" id="total-ctr">0%</div>
-      </div>
-      <div class="card">
-        <div class="card-label">노출 RPM</div>
-        <div class="card-value" id="total-imp-rpm">0원</div>
-      </div>
-      <div class="card">
-        <div class="card-label">요청 RPM</div>
-        <div class="card-value" id="total-req-rpm">0원</div>
-      </div>
-    </div>
-
-    <!-- 플랫폼별 수익 -->
-    <div class="platform-section" id="platform-section" style="display:none;">
-      <h2>플랫폼별 수익</h2>
-      <div class="platform-cards" id="platform-cards"></div>
-    </div>
-
-    <!-- 로딩 / 오류 / 데이터 없음 -->
-    <div id="loading" class="loading hidden">
-      <div class="spinner"></div>
-      <span>데이터를 불러오는 중...</span>
-    </div>
-    <div id="error-msg" class="error-msg hidden"></div>
-    <div id="empty-msg" class="empty-msg hidden">카페/테이블 광고 단위 데이터가 없습니다.</div>
-
-    <!-- 날짜별 수익 차트 영역 -->
-    <div class="chart-section" id="chart-section" style="display:none;">
-      <h2>날짜별 수익 추이</h2>
-      <canvas id="profit-chart"></canvas>
-    </div>
-
-    <!-- 광고단위별 상세 테이블 -->
-    <div class="table-section" id="table-section" style="display:none;">
-      <div class="table-header-row">
-        <h2>광고단위별 상세</h2>
-        <div class="table-header-right">
-          <span id="row-count"></span>
-          <button id="csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+        <div class="filter-row">
+          <div class="filter-area">
+            <label for="adunit-filter">광고단위명</label>
+            <select id="adunit-filter">
+              <option value="">전체 광고단위명</option>
+            </select>
+          </div>
+          <div class="filter-area">
+            <label for="adunit-id-filter">광고단위 ID</label>
+            <select id="adunit-id-filter">
+              <option value="">전체 광고단위 ID</option>
+            </select>
+          </div>
+          <div class="filter-area">
+            <label for="platform-filter">플랫폼</label>
+            <select id="platform-filter">
+              <option value="">전체 플랫폼</option>
+              <option value="PC Web">PC Web</option>
+              <option value="Mobile Web">Mobile Web</option>
+              <option value="App iOS">App iOS</option>
+              <option value="App Android">App Android</option>
+            </select>
+          </div>
+          <button id="search-btn" class="search-btn">조회</button>
         </div>
       </div>
-      <div class="table-wrapper">
-        <table id="result-table">
-          <thead>
-            <tr>
-              <th data-col="date">날짜<span class="sort-icon">↕</span></th>
-              <th data-col="adunitId">광고단위 ID<span class="sort-icon">↕</span></th>
-              <th data-col="adunit">광고단위명<span class="sort-icon">↕</span></th>
-              <th data-col="request">요청수<span class="sort-icon">↕</span></th>
-              <th data-col="response">응답수<span class="sort-icon">↕</span></th>
-              <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
-              <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
-              <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
-              <th data-col="profit">수익 (적립금)<span class="sort-icon">↕</span></th>
-              <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
-            </tr>
-          </thead>
-          <tbody id="result-body"></tbody>
-        </table>
+
+      <!-- 요약 카드 -->
+      <div class="summary-cards" id="summary-cards" style="display:none;">
+        <div class="card total">
+          <div class="card-label">총 수익 (적립금)</div>
+          <div class="card-value" id="total-profit">0원</div>
+        </div>
+        <div class="card">
+          <div class="card-label">총 노출 수</div>
+          <div class="card-value" id="total-impression">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">총 클릭 수</div>
+          <div class="card-value" id="total-click">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">클릭률 (CTR)</div>
+          <div class="card-value" id="total-ctr">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">노출 RPM</div>
+          <div class="card-value" id="total-imp-rpm">0원</div>
+        </div>
+        <div class="card">
+          <div class="card-label">요청 RPM</div>
+          <div class="card-value" id="total-req-rpm">0원</div>
+        </div>
       </div>
-    </div>
-  </div>
+
+      <!-- 플랫폼별 수익 -->
+      <div class="platform-section" id="platform-section" style="display:none;">
+        <h2>플랫폼별 수익</h2>
+        <div class="platform-cards" id="platform-cards"></div>
+      </div>
+
+      <!-- 로딩 / 오류 / 데이터 없음 -->
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <span>데이터를 불러오는 중...</span>
+      </div>
+      <div id="error-msg" class="error-msg hidden"></div>
+      <div id="empty-msg" class="empty-msg hidden">카페/테이블 광고 단위 데이터가 없습니다.</div>
+
+      <!-- 날짜별 수익 차트 -->
+      <div class="chart-section" id="chart-section" style="display:none;">
+        <h2>날짜별 수익 추이</h2>
+        <canvas id="profit-chart"></canvas>
+      </div>
+
+      <!-- 광고단위별 상세 테이블 -->
+      <div class="table-section" id="table-section" style="display:none;">
+        <div class="table-header-row">
+          <h2>광고단위별 상세</h2>
+          <div class="table-header-right">
+            <span id="row-count"></span>
+            <button id="csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="result-table">
+            <thead>
+              <tr>
+                <th data-col="date">날짜<span class="sort-icon">↕</span></th>
+                <th data-col="adunitId">광고단위 ID<span class="sort-icon">↕</span></th>
+                <th data-col="adunit">광고단위명<span class="sort-icon">↕</span></th>
+                <th data-col="request">요청수<span class="sort-icon">↕</span></th>
+                <th data-col="response">응답수<span class="sort-icon">↕</span></th>
+                <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
+                <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
+                <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
+                <th data-col="profit">수익 (적립금)<span class="sort-icon">↕</span></th>
+                <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="result-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /adfit-section -->
+
+    <!-- ========== 네이버 섹션 ========== -->
+    <div id="naver-section" class="hidden">
+      <header>
+        <h1><span class="title-by">비투스가 만든</span> 카페 네이버 수익 대시보드</h1>
+        <p class="subtitle">광고ID에 <strong>카페</strong>가 포함된 수익만 표시합니다. (AXZ매출 기준)</p>
+      </header>
+
+      <!-- CSV 업로드 영역 -->
+      <div class="naver-upload-zone" id="naver-upload-zone">
+        <input type="file" id="naver-csv-input" accept=".csv" />
+        <div class="naver-upload-inner">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#1A73E8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="naver-upload-title">CSV 파일을 드래그하거나 클릭하여 업로드</p>
+          <p class="naver-upload-sub">네이버 광고매출 리포트 CSV 파일을 올려주세요</p>
+        </div>
+      </div>
+
+      <!-- 업로드된 파일 정보 -->
+      <div id="naver-file-info" class="naver-file-info hidden">
+        <span id="naver-file-name"></span>
+        <button id="naver-file-reset" class="naver-file-reset">✕ 파일 변경</button>
+      </div>
+
+      <!-- 기간 탭 -->
+      <div class="period-tabs" id="naver-period-tabs" style="display:none;">
+        <button class="tab-btn active" data-naver-period="daily">일별</button>
+        <button class="tab-btn" data-naver-period="weekly">주별</button>
+        <button class="tab-btn" data-naver-period="monthly">월별</button>
+      </div>
+
+      <!-- 날짜 + 필터 영역 -->
+      <div class="controls" id="naver-controls" style="display:none;">
+        <!-- 일별 -->
+        <div class="date-range" id="naver-date-range-daily">
+          <label>시작일 <input type="text" id="naver-start-d" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료일 <input type="text" id="naver-end-d" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <!-- 주별 -->
+        <div class="date-range hidden" id="naver-date-range-weekly">
+          <label>시작 주 <input type="text" id="naver-start-w" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 주 <input type="text" id="naver-end-w" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <!-- 월별 -->
+        <div class="date-range hidden" id="naver-date-range-monthly">
+          <label>시작 월 <input type="text" id="naver-start-m" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 월 <input type="text" id="naver-end-m" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <!-- 필터 -->
+        <div class="filter-row">
+          <div class="filter-area">
+            <label for="naver-adid-filter">광고ID</label>
+            <select id="naver-adid-filter">
+              <option value="">전체 광고ID</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 요약 카드 -->
+      <div class="summary-cards" id="naver-summary-cards" style="display:none;">
+        <div class="card total">
+          <div class="card-label">총 수익 (AXZ매출)</div>
+          <div class="card-value" id="naver-total-profit">0원</div>
+        </div>
+        <div class="card">
+          <div class="card-label">총 노출수</div>
+          <div class="card-value" id="naver-total-impression">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">총 클릭수</div>
+          <div class="card-value" id="naver-total-click">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">클릭률 (CTR)</div>
+          <div class="card-value" id="naver-total-ctr">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">노출 RPM</div>
+          <div class="card-value" id="naver-total-imp-rpm">0원</div>
+        </div>
+        <div class="card">
+          <div class="card-label">요청 RPM</div>
+          <div class="card-value" id="naver-total-req-rpm">0원</div>
+        </div>
+      </div>
+
+      <!-- 매체별 수익 -->
+      <div class="platform-section" id="naver-platform-section" style="display:none;">
+        <h2>매체별 수익</h2>
+        <div class="platform-cards" id="naver-platform-cards"></div>
+      </div>
+
+      <!-- 날짜별 수익 차트 -->
+      <div class="chart-section" id="naver-chart-section" style="display:none;">
+        <h2>날짜별 수익 추이</h2>
+        <canvas id="naver-profit-chart"></canvas>
+      </div>
+
+      <!-- 광고ID별 상세 테이블 -->
+      <div class="table-section" id="naver-table-section" style="display:none;">
+        <div class="table-header-row">
+          <h2>광고ID별 상세</h2>
+          <div class="table-header-right">
+            <span id="naver-row-count"></span>
+            <button id="naver-csv-dl-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="naver-result-table">
+            <thead>
+              <tr>
+                <th data-col="date">날짜<span class="sort-icon">↕</span></th>
+                <th data-col="adId">광고ID<span class="sort-icon">↕</span></th>
+                <th data-col="media">매체<span class="sort-icon">↕</span></th>
+                <th data-col="request">요청수<span class="sort-icon">↕</span></th>
+                <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
+                <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
+                <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
+                <th data-col="impRpm">노출RPM<span class="sort-icon">↕</span></th>
+                <th data-col="reqRpm">요청RPM<span class="sort-icon">↕</span></th>
+                <th data-col="profit">AXZ매출<span class="sort-icon">↕</span></th>
+                <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="naver-result-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /naver-section -->
+
+  </div><!-- /container -->
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
   <script src="app.js"></script>
+  <script src="naver.js"></script>
 </body>
 </html>
