@@ -414,25 +414,51 @@ header .subtitle strong {
   font-size: 13px;
   color: var(--text-sub);
 }
+.table-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.csv-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: #EEF4FF;
+  border: 1px solid #c7d9fb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.csv-btn:hover { background: #dde8fd; }
 .table-wrapper {
   overflow-x: auto;
 }
 table {
   width: 100%;
-  min-width: 820px;
+  min-width: 960px;
   border-collapse: collapse;
   font-size: 13px;
   table-layout: fixed;
 }
-/* 컬럼 너비 고정 (광고단위명은 나머지 공간 자동 분배) */
-#result-table th:nth-child(1), #result-table td:nth-child(1) { width: 92px; }
-#result-table th:nth-child(2), #result-table td:nth-child(2) { width: 140px; }
-#result-table th:nth-child(4), #result-table td:nth-child(4) { width: 82px; }
-#result-table th:nth-child(5), #result-table td:nth-child(5) { width: 82px; }
-#result-table th:nth-child(6), #result-table td:nth-child(6) { width: 72px; }
-#result-table th:nth-child(7), #result-table td:nth-child(7) { width: 62px; }
-#result-table th:nth-child(8), #result-table td:nth-child(8) { width: 62px; }
-#result-table th:nth-child(9), #result-table td:nth-child(9) { width: 120px; }
+/*
+  컬럼 너비: 합계 840px 고정 → 1200px 뷰포트(가용 1120px)에서 광고단위명이 280px 확보
+  날짜(90) + 광고단위ID(178) + 광고단위명(flex) + 요청수(88) + 응답수(88)
+  + 노출수(76) + 클릭수(62) + CTR(58) + 수익(108) + 분포(64)
+*/
+#result-table th:nth-child(1),  #result-table td:nth-child(1)  { width: 90px; }
+#result-table th:nth-child(2),  #result-table td:nth-child(2)  { width: 178px; }
+/* 3번(광고단위명): 너비 미지정 → 나머지 공간 자동 분배 */
+#result-table th:nth-child(4),  #result-table td:nth-child(4)  { width: 88px; }
+#result-table th:nth-child(5),  #result-table td:nth-child(5)  { width: 88px; }
+#result-table th:nth-child(6),  #result-table td:nth-child(6)  { width: 76px; }
+#result-table th:nth-child(7),  #result-table td:nth-child(7)  { width: 62px; }
+#result-table th:nth-child(8),  #result-table td:nth-child(8)  { width: 58px; }
+#result-table th:nth-child(9),  #result-table td:nth-child(9)  { width: 108px; }
+#result-table th:nth-child(10), #result-table td:nth-child(10) { width: 64px; }
 thead th {
   background: var(--bg);
   padding: 8px 10px;
@@ -441,8 +467,6 @@ thead th {
   color: var(--text-sub);
   border-bottom: 2px solid var(--border);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 thead th:first-child,
 thead th:nth-child(2),
@@ -483,7 +507,6 @@ tbody td {
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--text);
 }
 tbody td:first-child,

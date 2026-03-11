@@ -129,6 +129,7 @@ const platformCardsEl  = document.getElementById('platform-cards');
 const tableSection   = document.getElementById('table-section');
 const resultBody     = document.getElementById('result-body');
 const rowCountEl     = document.getElementById('row-count');
+const csvBtn         = document.getElementById('csv-btn');
 const chartSection   = document.getElementById('chart-section');
 const totalProfit    = document.getElementById('total-profit');
 const totalImpression = document.getElementById('total-impression');
@@ -405,6 +406,7 @@ function getSortValue(row, col) {
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.impression ? row.click / row.impression : 0;
     case 'profit':     return row.profit     || 0;
+    case 'profitPct':  return row._profitPct || 0;
     default:           return '';
   }
 }
@@ -428,6 +430,10 @@ function updateSortHeaders() {
 
 // ── 테이블 렌더 ─────────────────────────
 function renderTable(rows) {
+  // 분포(%) 계산 - 정렬 전에 세팅해야 profitPct 정렬이 작동함
+  const totalP = rows.reduce((s, r) => s + (r.profit || 0), 0);
+  rows.forEach(r => { r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0; });
+
   const sorted = sortRows(rows);
   updateSortHeaders();
   rowCountEl.textContent = `총 ${sorted.length}건`;
@@ -436,21 +442,87 @@ function renderTable(rows) {
     const dateLabel = currentPeriod === 'weekly'
       ? (r._weekLabel || '-')
       : formatDate(r.day || r.month);
+    const distPct = r._profitPct.toFixed(1) + '%';
     return `<tr>
       <td>${dateLabel}</td>
-      <td title="${r.adunitId || ''}">${r.adunitId || '-'}</td>
-      <td title="${r.adunitName || ''}">${r.adunitName || '-'}</td>
+      <td>${r.adunitId || '-'}</td>
+      <td>${r.adunitName || '-'}</td>
       <td>${comma(r.request)}</td>
       <td>${comma(r.response)}</td>
       <td>${comma(r.impression)}</td>
       <td>${comma(r.click)}</td>
       <td>${pct(r.click, r.impression)}</td>
       <td class="profit-cell"><span class="profit-cell-inner"><span>${won(r.profit)}</span>${copyBtn(r.profit || 0)}</span></td>
+      <td>${distPct}</td>
     </tr>`;
   }).join('');
 
   tableSection.style.display = '';
 }
+
+// ── CSV 다운로드 ──────────────────────────
+function downloadCSV() {
+  const displayRows = applyFilters(allRows);
+  const totalP   = displayRows.reduce((s, r) => s + (r.profit     || 0), 0);
+  const totalImp = displayRows.reduce((s, r) => s + (r.impression || 0), 0);
+  const totalClk = displayRows.reduce((s, r) => s + (r.click      || 0), 0);
+  const totalReq = displayRows.reduce((s, r) => s + (r.request    || 0), 0);
+  const ctrVal    = totalImp ? ((totalClk / totalImp) * 100).toFixed(2) + '%' : '0.00%';
+  const impRpmVal = totalImp ? ((totalP / totalImp) * 1000).toFixed(2) + '원' : '0.00원';
+  const reqRpmVal = totalReq ? ((totalP / totalReq) * 1000).toFixed(2) + '원' : '0.00원';
+
+  // 조회 기간 텍스트
+  const { startDate, endDate } = getSearchParams();
+  const periodLabel = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
+
+  const esc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const row = (...cols) => cols.map(esc).join(',');
+
+  const lines = [
+    row('조회 기간', periodLabel),
+    row('총 수익 (적립금)', totalP),
+    row('총 노출수', totalImp),
+    row('총 클릭수', totalClk),
+    row('클릭률 (CTR)', ctrVal),
+    row('노출 RPM', impRpmVal),
+    row('요청 RPM', reqRpmVal),
+    '',
+    row('날짜', '광고단위 ID', '광고단위명', '요청수', '응답수', '노출수', '클릭수', 'CTR', '수익 (적립금)', '분포'),
+  ];
+
+  displayRows.forEach(r => {
+    r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0;
+  });
+  sortRows(displayRows).forEach(r => {
+    const dateLabel = currentPeriod === 'weekly'
+      ? (r._weekLabel || '-') : formatDate(r.day || r.month);
+    lines.push(row(
+      dateLabel,
+      r.adunitId   || '-',
+      r.adunitName || '-',
+      r.request    || 0,
+      r.response   || 0,
+      r.impression || 0,
+      r.click      || 0,
+      pct(r.click, r.impression),
+      r.profit     || 0,
+      r._profitPct.toFixed(1) + '%'
+    ));
+  });
+
+  const csv  = lines.join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `adfit_${startDate}_${endDate}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+csvBtn.addEventListener('click', downloadCSV);
 
 // ── 차트 렌더 ────────────────────────────
 function renderChart(rows) {

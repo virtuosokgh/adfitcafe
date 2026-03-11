@@ -127,7 +127,10 @@
     <div class="table-section" id="table-section" style="display:none;">
       <div class="table-header-row">
         <h2>광고단위별 상세</h2>
-        <span id="row-count"></span>
+        <div class="table-header-right">
+          <span id="row-count"></span>
+          <button id="csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+        </div>
       </div>
       <div class="table-wrapper">
         <table id="result-table">
@@ -142,6 +145,7 @@
               <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
               <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
               <th data-col="profit">수익 (적립금)<span class="sort-icon">↕</span></th>
+              <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
             </tr>
           </thead>
           <tbody id="result-body"></tbody>
