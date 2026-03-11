@@ -23,53 +23,56 @@
 
     <!-- 날짜 선택 영역 -->
     <div class="controls">
+      <!-- 일별: Flatpickr text 입력 -->
       <div class="date-range" id="date-range-daily">
         <label>시작일 <input type="text" id="start-date-d" placeholder="날짜 선택" readonly /></label>
         <span class="dash">~</span>
         <label>종료일 <input type="text" id="end-date-d" placeholder="날짜 선택" readonly /></label>
       </div>
+
+      <!-- 주별: Flatpickr text 입력 (빠른 선택 버튼은 캘린더 안에) -->
       <div class="date-range hidden" id="date-range-weekly">
-        <label>시작 주 <input type="week" id="start-date-w" /></label>
+        <label>시작 주 <input type="text" id="start-date-w" placeholder="날짜 선택" readonly /></label>
         <span class="dash">~</span>
-        <label>종료 주 <input type="week" id="end-date-w" /></label>
-        <div class="quick-btns">
-          <button class="quick-btn" data-quick="thisweek">이번 주</button>
-          <button class="quick-btn" data-quick="lastweek">지난 주</button>
-          <button class="quick-btn" data-quick="last4weeks">최근 4주</button>
-        </div>
+        <label>종료 주 <input type="text" id="end-date-w" placeholder="날짜 선택" readonly /></label>
       </div>
+
+      <!-- 월별: Flatpickr text 입력 (빠른 선택 버튼은 캘린더 안에) -->
       <div class="date-range hidden" id="date-range-monthly">
-        <label>시작 월 <input type="month" id="start-date-m" /></label>
+        <label>시작 월 <input type="text" id="start-date-m" placeholder="날짜 선택" readonly /></label>
         <span class="dash">~</span>
-        <label>종료 월 <input type="month" id="end-date-m" /></label>
-        <div class="quick-btns">
-          <button class="quick-btn" data-quick="thismonth">이번 달</button>
-          <button class="quick-btn" data-quick="lastmonth">지난 달</button>
-          <button class="quick-btn" data-quick="last3months">최근 3개월</button>
+        <label>종료 월 <input type="text" id="end-date-m" placeholder="날짜 선택" readonly /></label>
+      </div>
+
+      <!-- 필터 영역 (한 줄) -->
+      <div class="filter-row">
+        <div class="filter-area">
+          <label for="adunit-filter">광고단위명</label>
+          <select id="adunit-filter">
+            <option value="">전체 광고단위명</option>
+          </select>
         </div>
-      </div>
 
-      <!-- 광고단위 필터 -->
-      <div class="filter-area">
-        <label for="adunit-filter">광고 단위 필터</label>
-        <select id="adunit-filter">
-          <option value="">전체 광고단위</option>
-        </select>
-      </div>
+        <div class="filter-area">
+          <label for="adunit-id-filter">광고단위 ID</label>
+          <select id="adunit-id-filter">
+            <option value="">전체 광고단위 ID</option>
+          </select>
+        </div>
 
-      <!-- 플랫폼 필터 -->
-      <div class="filter-area">
-        <label for="platform-filter">플랫폼 필터</label>
-        <select id="platform-filter">
-          <option value="">전체 플랫폼</option>
-          <option value="PC Web">PC Web</option>
-          <option value="Mobile Web">Mobile Web</option>
-          <option value="App Ios">App iOS</option>
-          <option value="App Android">App Android</option>
-        </select>
-      </div>
+        <div class="filter-area">
+          <label for="platform-filter">플랫폼</label>
+          <select id="platform-filter">
+            <option value="">전체 플랫폼</option>
+            <option value="PC Web">PC Web</option>
+            <option value="Mobile Web">Mobile Web</option>
+            <option value="App iOS">App iOS</option>
+            <option value="App Android">App Android</option>
+          </select>
+        </div>
 
-      <button id="search-btn" class="search-btn">조회</button>
+        <button id="search-btn" class="search-btn">조회</button>
+      </div>
     </div>
 
     <!-- 요약 카드 -->
@@ -131,7 +134,7 @@
           <thead>
             <tr>
               <th data-col="date">날짜<span class="sort-icon">↕</span></th>
-              <th data-col="platform">플랫폼 (매체명)<span class="sort-icon">↕</span></th>
+              <th data-col="adunitId">광고단위 ID<span class="sort-icon">↕</span></th>
               <th data-col="adunit">광고단위명<span class="sort-icon">↕</span></th>
               <th data-col="request">요청수<span class="sort-icon">↕</span></th>
               <th data-col="response">응답수<span class="sort-icon">↕</span></th>
