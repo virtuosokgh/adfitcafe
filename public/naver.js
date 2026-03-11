@@ -4,6 +4,9 @@
     daysAgo, monthsAgo, today, SearchableSelect 공유)
    ========================================= */
 
+// ── 캐시 키 ──────────────────────────────────
+const NAVER_CACHE_KEY = 'naver_csv_cache';
+
 // ── 상태 변수 ──────────────────────────────
 let naverAllRows       = [];
 let naverChartInstance = null;
@@ -663,6 +666,12 @@ function handleNaverFile(file) {
       return;
     }
     naverAllRows = rows;
+    // 캐시 저장 (다음 접속 시 자동 복원용)
+    try {
+      localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
+        fileName: file.name, uploadedAt: new Date().toISOString(), rows
+      }));
+    } catch (_) { /* 용량 초과 시 무시 */ }
     const sizeKB = Math.round(file.size / 1024);
     naverFileNameEl.textContent = `📄 ${file.name}  (${rows.length}건 · ${sizeKB}KB)`;
     naverUploadZone.classList.add('hidden');
@@ -713,6 +722,7 @@ naverFileResetBtn.addEventListener('click', () => {
   naverPlatformCards.innerHTML = '';
   naverAdIdFilter.innerHTML    = '<option value="">전체 광고ID</option>';
   if (naverSsAdId) naverSsAdId.refresh();
+  localStorage.removeItem(NAVER_CACHE_KEY); // 캐시 삭제
   switchNaverPeriod('daily');
 });
 
@@ -732,5 +742,33 @@ document.querySelector('#naver-result-table thead').addEventListener('click', e 
 // ── CSV 다운로드 버튼 ─────────────────────
 naverCsvDlBtn.addEventListener('click', downloadNaverCSV);
 
+// ── 캐시 복원 ─────────────────────────────
+function loadNaverFromCache() {
+  try {
+    const raw = localStorage.getItem(NAVER_CACHE_KEY);
+    if (!raw) return;
+    const { fileName, uploadedAt, rows } = JSON.parse(raw);
+    if (!rows || rows.length === 0) return;
+    naverAllRows = rows;
+    const dateStr = new Date(uploadedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+    naverFileNameEl.textContent = `📄 ${fileName}  (${rows.length}건 · 저장됨 ${dateStr})`;
+    naverUploadZone.classList.add('hidden');
+    naverFileInfo.classList.remove('hidden');
+    naverPeriodTabsEl.style.display = '';
+    naverControls.style.display     = '';
+    updateNaverFilters(rows);
+    if (!naverSsAdId) {
+      naverSsAdId = new SearchableSelect(naverAdIdFilter);
+    } else {
+      naverSsAdId.refresh();
+    }
+    setNaverDatesFromData();
+    naverReRender();
+  } catch (_) {
+    localStorage.removeItem(NAVER_CACHE_KEY); // 손상된 캐시 삭제
+  }
+}
+
 // ── 초기화 ────────────────────────────────
 initNaverFlatpickr();
+loadNaverFromCache();
