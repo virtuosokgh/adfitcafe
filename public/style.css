@@ -445,20 +445,21 @@ table {
   table-layout: fixed;
 }
 /*
-  컬럼 너비: 날짜(90) + 광고단위ID(178) + 광고단위명(flex) + 요청수(82) + 응답수(82)
-  + 노출수(72) + 노출율(65) + 클릭수(60) + CTR(55) + 수익(108) + 분포(62)
+  컬럼 너비: 날짜(90) + 광고단위ID(170) + 광고단위명(flex) + 요청수(78) + 응답수(78)
+  + 노출수(70) + 노출율(62) + 클릭수(58) + CTR(52) + eCPM(78) + 수익(104) + 분포(60)
 */
 #result-table th:nth-child(1),  #result-table td:nth-child(1)  { width: 90px; }
-#result-table th:nth-child(2),  #result-table td:nth-child(2)  { width: 178px; }
+#result-table th:nth-child(2),  #result-table td:nth-child(2)  { width: 170px; }
 /* 3번(광고단위명): 너비 미지정 → 나머지 공간 자동 분배 */
-#result-table th:nth-child(4),  #result-table td:nth-child(4)  { width: 82px; }
-#result-table th:nth-child(5),  #result-table td:nth-child(5)  { width: 82px; }
-#result-table th:nth-child(6),  #result-table td:nth-child(6)  { width: 72px; }
-#result-table th:nth-child(7),  #result-table td:nth-child(7)  { width: 65px; }
-#result-table th:nth-child(8),  #result-table td:nth-child(8)  { width: 60px; }
-#result-table th:nth-child(9),  #result-table td:nth-child(9)  { width: 55px; }
-#result-table th:nth-child(10), #result-table td:nth-child(10) { width: 108px; }
-#result-table th:nth-child(11), #result-table td:nth-child(11) { width: 62px; }
+#result-table th:nth-child(4),  #result-table td:nth-child(4)  { width: 78px; }
+#result-table th:nth-child(5),  #result-table td:nth-child(5)  { width: 78px; }
+#result-table th:nth-child(6),  #result-table td:nth-child(6)  { width: 70px; }
+#result-table th:nth-child(7),  #result-table td:nth-child(7)  { width: 62px; }
+#result-table th:nth-child(8),  #result-table td:nth-child(8)  { width: 58px; }
+#result-table th:nth-child(9),  #result-table td:nth-child(9)  { width: 52px; }
+#result-table th:nth-child(10), #result-table td:nth-child(10) { width: 78px; }
+#result-table th:nth-child(11), #result-table td:nth-child(11) { width: 104px; }
+#result-table th:nth-child(12), #result-table td:nth-child(12) { width: 60px; }
 thead th {
   background: var(--bg);
   padding: 8px 10px;
@@ -737,12 +738,13 @@ tbody td:nth-child(3) { text-align: left; }
 #naver-result-table th:nth-child(1),  #naver-result-table td:nth-child(1)  { width: 100px; }
 #naver-result-table th:nth-child(2),  #naver-result-table td:nth-child(2)  { width: 180px; }
 /* 3번(매체): 나머지 공간 자동 */
-#naver-result-table th:nth-child(4),  #naver-result-table td:nth-child(4)  { width: 74px; }
-#naver-result-table th:nth-child(5),  #naver-result-table td:nth-child(5)  { width: 74px; }
-#naver-result-table th:nth-child(6),  #naver-result-table td:nth-child(6)  { width: 65px; }
-#naver-result-table th:nth-child(7),  #naver-result-table td:nth-child(7)  { width: 64px; }
-#naver-result-table th:nth-child(8),  #naver-result-table td:nth-child(8)  { width: 56px; }
-#naver-result-table th:nth-child(9),  #naver-result-table td:nth-child(9)  { width: 74px; }
-#naver-result-table th:nth-child(10), #naver-result-table td:nth-child(10) { width: 74px; }
-#naver-result-table th:nth-child(11), #naver-result-table td:nth-child(11) { width: 100px; }
-#naver-result-table th:nth-child(12), #naver-result-table td:nth-child(12) { width: 58px; }
+#naver-result-table th:nth-child(4),  #naver-result-table td:nth-child(4)  { width: 70px; }
+#naver-result-table th:nth-child(5),  #naver-result-table td:nth-child(5)  { width: 70px; }
+#naver-result-table th:nth-child(6),  #naver-result-table td:nth-child(6)  { width: 62px; }
+#naver-result-table th:nth-child(7),  #naver-result-table td:nth-child(7)  { width: 60px; }
+#naver-result-table th:nth-child(8),  #naver-result-table td:nth-child(8)  { width: 52px; }
+#naver-result-table th:nth-child(9),  #naver-result-table td:nth-child(9)  { width: 70px; }
+#naver-result-table th:nth-child(10), #naver-result-table td:nth-child(10) { width: 70px; }
+#naver-result-table th:nth-child(11), #naver-result-table td:nth-child(11) { width: 70px; }
+#naver-result-table th:nth-child(12), #naver-result-table td:nth-child(12) { width: 96px; }
+#naver-result-table th:nth-child(13), #naver-result-table td:nth-child(13) { width: 56px; }
