@@ -356,16 +356,18 @@ function renderSummary(rows) {
   const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
   const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
   const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
-  const ctrNum    = imp ? ((clk / imp) * 100).toFixed(2)   : '0.00';
-  const impRpmNum = imp ? ((profit / imp) * 1000).toFixed(2) : '0.00';
-  const reqRpmNum = req ? ((profit / req) * 1000).toFixed(2) : '0.00';
+  const ctrNum     = imp ? ((clk / imp) * 100).toFixed(2)    : '0.00';
+  const impRpmNum  = imp ? ((profit / imp) * 1000).toFixed(2) : '0.00';
+  const reqRpmNum  = req ? ((profit / req) * 1000).toFixed(2) : '0.00';
+  const impRateNum = req ? ((imp / req) * 100).toFixed(2)     : '0.00';
 
   totalProfit.innerHTML     = `<span>${won(profit)}</span>${copyBtn(profit)}`;
   totalImpression.innerHTML = `<span>${comma(imp)}</span>${copyBtn(imp)}`;
   totalClick.innerHTML      = `<span>${comma(clk)}</span>${copyBtn(clk)}`;
   totalCtr.innerHTML        = `<span>${ctrNum}%</span>${copyBtn(ctrNum)}`;
-  document.getElementById('total-imp-rpm').innerHTML = `<span>${rpmFmt(impRpmNum)}</span>${copyBtn(impRpmNum)}`;
-  document.getElementById('total-req-rpm').innerHTML = `<span>${rpmFmt(reqRpmNum)}</span>${copyBtn(reqRpmNum)}`;
+  document.getElementById('total-imp-rpm').innerHTML  = `<span>${rpmFmt(impRpmNum)}</span>${copyBtn(impRpmNum)}`;
+  document.getElementById('total-req-rpm').innerHTML  = `<span>${rpmFmt(reqRpmNum)}</span>${copyBtn(reqRpmNum)}`;
+  document.getElementById('total-imp-rate').innerHTML = `<span>${impRateNum}%</span>`;
   summaryCards.style.display = '';
 }
 
@@ -404,6 +406,7 @@ function getSortValue(row, col) {
     case 'request':    return row.request    || 0;
     case 'response':   return row.response   || 0;
     case 'impression': return row.impression || 0;
+    case 'impRate':    return row.request ? row.impression / row.request : 0;
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.impression ? row.click / row.impression : 0;
     case 'profit':     return row.profit     || 0;
@@ -451,6 +454,7 @@ function renderTable(rows) {
       <td>${comma(r.request)}</td>
       <td>${comma(r.response)}</td>
       <td>${comma(r.impression)}</td>
+      <td>${r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%'}</td>
       <td>${comma(r.click)}</td>
       <td>${pct(r.click, r.impression)}</td>
       <td class="profit-cell"><span class="profit-cell-inner"><span>${won(r.profit)}</span>${copyBtn(r.profit || 0)}</span></td>
@@ -488,7 +492,7 @@ function downloadCSV() {
     row('노출 RPM', impRpmVal),
     row('요청 RPM', reqRpmVal),
     '',
-    row('날짜', '광고단위 ID', '광고단위명', '요청수', '응답수', '노출수', '클릭수', 'CTR', '수익 (적립금)', '분포'),
+    row('날짜', '광고단위 ID', '광고단위명', '요청수', '응답수', '노출수', '노출율(%)', '클릭수', 'CTR', '수익 (적립금)', '분포'),
   ];
 
   displayRows.forEach(r => {
@@ -504,6 +508,7 @@ function downloadCSV() {
       r.request    || 0,
       r.response   || 0,
       r.impression || 0,
+      r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%',
       r.click      || 0,
       pct(r.click, r.impression),
       r.profit     || 0,

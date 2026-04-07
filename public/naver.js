@@ -255,8 +255,9 @@ function renderNaverSummary(rows) {
   const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
   const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
   const ctrNum = imp ? ((clk / imp) * 100).toFixed(2) : '0.00';
-  const impRpmVal = Math.round(calcImpRpm(profit, imp));
-  const reqRpmVal = Math.round(calcReqRpm(profit, req));
+  const impRpmVal  = Math.round(calcImpRpm(profit, imp));
+  const reqRpmVal  = Math.round(calcReqRpm(profit, req));
+  const impRateNum = req ? ((imp / req) * 100).toFixed(2) : '0.00';
 
   document.getElementById('naver-total-profit').innerHTML     = `<span>${won(profit)}</span>${naverCopyBtn(profit)}`;
   document.getElementById('naver-total-impression').innerHTML = `<span>${comma(imp)}</span>${naverCopyBtn(imp)}`;
@@ -264,6 +265,7 @@ function renderNaverSummary(rows) {
   document.getElementById('naver-total-ctr').innerHTML        = `<span>${ctrNum}%</span>`;
   document.getElementById('naver-total-imp-rpm').innerHTML    = `<span>${won(impRpmVal)}</span>${naverCopyBtn(impRpmVal)}`;
   document.getElementById('naver-total-req-rpm').innerHTML    = `<span>${won(reqRpmVal)}</span>${naverCopyBtn(reqRpmVal)}`;
+  document.getElementById('naver-total-imp-rate').innerHTML   = `<span>${impRateNum}%</span>`;
   naverSummaryCards.style.display = '';
 }
 
@@ -298,6 +300,7 @@ function getNaverSortValue(row, col) {
     case 'media':      return row.media      || '';
     case 'request':    return row.request    || 0;
     case 'impression': return row.impression || 0;
+    case 'impRate':    return row.request ? row.impression / row.request : 0;
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.ctr        || 0;
     case 'impRpm':     return row.impRpm     || 0;
@@ -346,6 +349,7 @@ function renderNaverTable(rows) {
       <td>${r.media || '-'}</td>
       <td>${comma(r.request)}</td>
       <td>${comma(r.impression)}</td>
+      <td>${r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%'}</td>
       <td>${comma(r.click)}</td>
       <td>${r.ctr.toFixed(2)}%</td>
       <td>${won(Math.round(r.impRpm))}</td>
@@ -431,7 +435,7 @@ function downloadNaverCSV() {
     row('노출 RPM', impRpmVal),
     row('요청 RPM', reqRpmVal),
     '',
-    row('날짜', '광고ID', '매체', '요청수', '노출수', '클릭수', 'CTR(%)', '노출RPM(원)', '요청RPM(원)', 'AXZ매출(원)', '분포'),
+    row('날짜', '광고ID', '매체', '요청수', '노출수', '노출율(%)', '클릭수', 'CTR(%)', '노출RPM(원)', '요청RPM(원)', 'AXZ매출(원)', '분포'),
   ];
   rows.forEach(r => {
     r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0;
@@ -441,7 +445,9 @@ function downloadNaverCSV() {
   naverSortRows(rows).forEach(r => {
     lines.push(row(
       r.date || '-', r.adId || '-', r.media || '-',
-      r.request || 0, r.impression || 0, r.click || 0,
+      r.request || 0, r.impression || 0,
+      r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%',
+      r.click || 0,
       r.ctr.toFixed(2) + '%',
       Math.round(r.impRpm) || 0, Math.round(r.reqRpm) || 0,
       r.profit || 0, r._profitPct.toFixed(1) + '%'
