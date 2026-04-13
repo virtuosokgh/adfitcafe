@@ -65,6 +65,22 @@
           </div>
           <button id="search-btn" class="search-btn">조회</button>
         </div>
+      <!-- 비교 필터 행 -->
+      <div class="filter-row compare-filter-row" id="compare-filter-row">
+        <div class="filter-area">
+          <label>광고단위명 비교</label>
+          <div id="mcs-cmp-adunit"></div>
+        </div>
+        <div class="filter-area">
+          <label>광고단위 ID 비교</label>
+          <div id="mcs-cmp-adunit-id"></div>
+        </div>
+        <div class="filter-area">
+          <label>플랫폼 비교</label>
+          <div id="mcs-cmp-platform"></div>
+        </div>
+        <div class="filter-placeholder"></div>
+      </div>
       </div>
 
       <!-- 요약 카드 -->
@@ -147,14 +163,6 @@
             </thead>
             <tbody id="result-body"></tbody>
           </table>
-        </div>
-      </div>
-      <!-- 광고단위 비교 패널 (광고단위명 2개 선택 시 자동 표시) -->
-      <div class="compare-section" id="compare-section" style="display:none;">
-        <h2>광고단위 비교</h2>
-        <div class="compare-cards" id="compare-cards"></div>
-        <div class="compare-chart-wrap">
-          <canvas id="compare-chart"></canvas>
         </div>
       </div>
     </div><!-- /adfit-section -->

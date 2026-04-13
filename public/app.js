@@ -21,6 +21,9 @@ let fpEndM   = null;          // 월별 Flatpickr 종료
 let mcsAdunit   = null;       // MultiCheckSelect 인스턴스 (광고단위명)
 let mcsAdunitId = null;       // MultiCheckSelect 인스턴스 (광고단위 ID)
 let mcsPlatform = null;       // MultiCheckSelect 인스턴스 (플랫폼)
+let mcsCmpAdunit   = null;  // 비교 MultiCheckSelect (광고단위명)
+let mcsCmpAdunitId = null;  // 비교 MultiCheckSelect (광고단위 ID)
+let mcsCmpPlatform = null;  // 비교 MultiCheckSelect (플랫폼)
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -253,7 +256,6 @@ function clearUI() {
   platformSection.style.display = 'none';
   tableSection.style.display    = 'none';
   chartSection.style.display    = 'none';
-  compareSection.style.display  = 'none';
   resultBody.innerHTML          = '';
   platformCardsEl.innerHTML     = '';
 }
@@ -268,6 +270,7 @@ function updateAdunitFilter(rows) {
   const names = [...new Set(rows.map(r => r.adunitName).filter(Boolean))].sort();
   mcsAdunit.refresh(names);
   if (pendingAdunits.length) { mcsAdunit.setSelected(pendingAdunits); pendingAdunits = []; }
+  if (mcsCmpAdunit) mcsCmpAdunit.refresh(names);
 }
 
 // ── 광고단위 ID 필터 옵션 업데이트 ─────────
@@ -275,14 +278,31 @@ function updateAdunitIdFilter(rows) {
   const ids = [...new Set(rows.map(r => r.adunitId).filter(Boolean))].sort();
   mcsAdunitId.refresh(ids);
   if (pendingAdunitIds.length) { mcsAdunitId.setSelected(pendingAdunitIds); pendingAdunitIds = []; }
+  if (mcsCmpAdunitId) mcsCmpAdunitId.refresh(ids);
 }
 
 // ── 필터 적용 ────────────────────────────
-function applyFilters(rows) {
+function applyFiltersA(rows) {
   let result = [...rows];
   const adunits   = mcsAdunit   ? mcsAdunit.getSelected()   : [];
   const adunitIds = mcsAdunitId ? mcsAdunitId.getSelected() : [];
   const platforms = mcsPlatform ? mcsPlatform.getSelected() : [];
+  if (adunits.length)   result = result.filter(r => adunits.includes(r.adunitName));
+  if (adunitIds.length) result = result.filter(r => adunitIds.includes(r.adunitId));
+  if (platforms.length) {
+    const expanded = new Set(platforms);
+    if (expanded.has('App 전체')) { expanded.add('App iOS'); expanded.add('App Android'); }
+    result = result.filter(r => expanded.has(r._platform));
+  }
+  return result;
+}
+
+function applyFiltersB(rows) {
+  const adunits   = mcsCmpAdunit   ? mcsCmpAdunit.getSelected()   : [];
+  const adunitIds = mcsCmpAdunitId ? mcsCmpAdunitId.getSelected() : [];
+  const platforms = mcsCmpPlatform ? mcsCmpPlatform.getSelected() : [];
+  if (!adunits.length && !adunitIds.length && !platforms.length) return [];
+  let result = [...rows];
   if (adunits.length)   result = result.filter(r => adunits.includes(r.adunitName));
   if (adunitIds.length) result = result.filter(r => adunitIds.includes(r.adunitId));
   if (platforms.length) {
@@ -337,23 +357,61 @@ function rpmFmt(n) {
   return Number(n).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '원';
 }
 
-function renderSummary(rows) {
-  const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
-  const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
-  const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
-  const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
-  const ctrNum     = imp ? ((clk / imp) * 100).toFixed(2)    : '0.00';
-  const impRpmNum  = imp ? ((profit / imp) * 1000).toFixed(2) : '0.00';
-  const reqRpmNum  = req ? ((profit / req) * 1000).toFixed(2) : '0.00';
-  const impRateNum = req ? ((imp / req) * 100).toFixed(2)     : '0.00';
+function renderSummary(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
 
-  totalProfit.innerHTML     = `<span>${won(profit)}</span>${copyBtn(profit)}`;
-  totalImpression.innerHTML = `<span>${comma(imp)}</span>${copyBtn(imp)}`;
-  totalClick.innerHTML      = `<span>${comma(clk)}</span>${copyBtn(clk)}`;
-  totalCtr.innerHTML        = `<span>${ctrNum}%</span>${copyBtn(ctrNum)}`;
-  document.getElementById('total-imp-rpm').innerHTML  = `<span>${rpmFmt(impRpmNum)}</span>${copyBtn(impRpmNum)}`;
-  document.getElementById('total-req-rpm').innerHTML  = `<span>${rpmFmt(reqRpmNum)}</span>${copyBtn(reqRpmNum)}`;
-  document.getElementById('total-imp-rate').innerHTML = `<span>${impRateNum}%</span>`;
+  function stats(rows) {
+    const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
+    const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
+    const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
+    const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
+    return { profit, imp, clk, req,
+      ctr:     imp ? ((clk / imp) * 100).toFixed(2) : '0.00',
+      impRpm:  imp ? (profit / imp) * 1000 : 0,
+      reqRpm:  req ? (profit / req) * 1000 : 0,
+      impRate: req ? ((imp / req) * 100).toFixed(2) : '0.00',
+    };
+  }
+
+  const a = stats(rowsA);
+  const b = hasCmp ? stats(rowsB) : null;
+
+  function cell(val, raw, titleTxt, cls) {
+    return `<span class="${cls}" title="${titleTxt}"><span>${val}</span>${copyBtn(raw)}</span>`;
+  }
+  function cellNoCopy(val, titleTxt, cls) {
+    return `<span class="${cls}" title="${titleTxt}"><span>${val}</span></span>`;
+  }
+
+  function setEl(id, aVal, aRaw, bVal, bRaw, titleA, titleB) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!hasCmp) {
+      el.innerHTML = `<span>${aVal}</span>${copyBtn(aRaw)}`;
+    } else {
+      el.innerHTML = cell(aVal, aRaw, titleA, 'cv-primary') + cell(bVal, bRaw, titleB, 'cv-compare');
+    }
+  }
+  function setElNoCopy(id, aVal, bVal, titleA, titleB) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!hasCmp) {
+      el.innerHTML = `<span>${aVal}</span>`;
+    } else {
+      el.innerHTML = cellNoCopy(aVal, titleA, 'cv-primary') + cellNoCopy(bVal, titleB, 'cv-compare');
+    }
+  }
+
+  const tA = '기본 필터', tB = '비교 필터';
+
+  setEl('total-profit',     won(a.profit),    a.profit,    hasCmp ? won(b.profit)    : '', hasCmp ? b.profit    : 0, tA, tB);
+  setEl('total-impression', comma(a.imp),     a.imp,       hasCmp ? comma(b.imp)     : '', hasCmp ? b.imp       : 0, tA, tB);
+  setEl('total-click',      comma(a.clk),     a.clk,       hasCmp ? comma(b.clk)     : '', hasCmp ? b.clk       : 0, tA, tB);
+  setElNoCopy('total-ctr',  a.ctr + '%',      hasCmp ? b.ctr + '%' : '', tA, tB);
+  setEl('total-imp-rpm',    rpmFmt(a.impRpm), a.impRpm,    hasCmp ? rpmFmt(b.impRpm) : '', hasCmp ? b.impRpm    : 0, tA, tB);
+  setEl('total-req-rpm',    rpmFmt(a.reqRpm), a.reqRpm,    hasCmp ? rpmFmt(b.reqRpm) : '', hasCmp ? b.reqRpm    : 0, tA, tB);
+  setElNoCopy('total-imp-rate', a.impRate + '%', hasCmp ? b.impRate + '%' : '', tA, tB);
+
   summaryCards.style.display = '';
 }
 
@@ -419,12 +477,16 @@ function updateSortHeaders() {
 }
 
 // ── 테이블 렌더 ─────────────────────────
-function renderTable(rows) {
-  // 분포(%) 계산 - 정렬 전에 세팅해야 profitPct 정렬이 작동함
-  const totalP = rows.reduce((s, r) => s + (r.profit || 0), 0);
-  rows.forEach(r => { r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0; });
+function renderTable(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
+  const combined = [
+    ...rowsA.map(r => ({...r, _group: 'a'})),
+    ...(hasCmp ? rowsB.map(r => ({...r, _group: 'b'})) : [])
+  ];
+  const totalP = combined.reduce((s, r) => s + (r.profit || 0), 0);
+  combined.forEach(r => { r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0; });
 
-  const sorted = sortRows(rows);
+  const sorted = sortRows(combined);
   updateSortHeaders();
   rowCountEl.textContent = `총 ${sorted.length}건`;
 
@@ -432,8 +494,9 @@ function renderTable(rows) {
     const dateLabel = currentPeriod === 'weekly'
       ? (r._weekLabel || '-')
       : formatDate(r.day || r.month);
-    const distPct = r._profitPct.toFixed(1) + '%';
-    return `<tr>
+    const distPct   = r._profitPct.toFixed(1) + '%';
+    const groupCls  = hasCmp ? ` class="tr-group-${r._group}" title="${r._group === 'a' ? '기본 필터' : '비교 필터'}"` : '';
+    return `<tr${groupCls}>
       <td>${dateLabel}</td>
       <td>${r.adunitId || '-'}</td>
       <td>${r.adunitName || '-'}</td>
@@ -453,7 +516,7 @@ function renderTable(rows) {
 
 // ── CSV 다운로드 ──────────────────────────
 function downloadCSV() {
-  const displayRows = applyFilters(allRows);
+  const displayRows = applyFiltersA(allRows);
   const totalP   = displayRows.reduce((s, r) => s + (r.profit     || 0), 0);
   const totalImp = displayRows.reduce((s, r) => s + (r.impression || 0), 0);
   const totalClk = displayRows.reduce((s, r) => s + (r.click      || 0), 0);
@@ -517,22 +580,35 @@ function downloadCSV() {
 csvBtn.addEventListener('click', downloadCSV);
 
 // ── 차트 렌더 ────────────────────────────
-function renderChart(rows) {
-  const map = new Map();
-  rows.forEach(r => {
-    const label = currentPeriod === 'weekly'
-      ? (r._weekLabel || '-')
-      : formatDate(r.day || r.month);
-    map.set(label, (map.get(label) || 0) + (r.profit || 0));
-  });
-  const labels = [...map.keys()].sort();
-  const data   = labels.map(l => map.get(l));
+function renderChart(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
+
+  function buildMap(rows) {
+    const map = new Map();
+    rows.forEach(r => {
+      const label = currentPeriod === 'weekly' ? (r._weekLabel || '-') : formatDate(r.day || r.month);
+      map.set(label, (map.get(label) || 0) + (r.profit || 0));
+    });
+    return map;
+  }
+
+  const mapA   = buildMap(rowsA);
+  const mapB   = hasCmp ? buildMap(rowsB) : new Map();
+  const labels = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
+  const dataA  = labels.map(l => mapA.get(l) || 0);
+  const dataB  = labels.map(l => mapB.get(l) || 0);
+
+  const datasets = [
+    { label: '기본 필터', data: dataA, backgroundColor: 'rgba(26,115,232,0.5)', borderColor: 'rgba(26,115,232,1)', borderWidth: 1.5, borderRadius: 4 },
+    ...(hasCmp ? [{ label: '비교 필터', data: dataB, backgroundColor: 'rgba(234,67,53,0.45)', borderColor: 'rgba(234,67,53,1)', borderWidth: 1.5, borderRadius: 4 }] : [])
+  ];
 
   chartSection.style.display = '';
 
   if (chartInstance) {
-    chartInstance.data.labels           = labels;
-    chartInstance.data.datasets[0].data = data;
+    chartInstance.data.labels   = labels;
+    chartInstance.data.datasets = datasets;
+    chartInstance.options.plugins.legend.display = hasCmp;
     chartInstance.update('active');
     return;
   }
@@ -540,23 +616,13 @@ function renderChart(rows) {
   const ctx = document.getElementById('profit-chart').getContext('2d');
   chartInstance = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: '수익 (원)',
-        data,
-        backgroundColor: 'rgba(26,115,232,0.5)',
-        borderColor: 'rgba(26,115,232,1)',
-        borderWidth: 1.5,
-        borderRadius: 4
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       animation: { duration: 400 },
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => won(ctx.parsed.y) } }
+        legend: { display: hasCmp },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${won(ctx.parsed.y)}` } }
       },
       scales: { y: { ticks: { callback: v => won(v) } } }
     }
@@ -602,23 +668,19 @@ async function fetchAndRender() {
 
     updateAdunitFilter(rows);
     updateAdunitIdFilter(rows);
-    let displayRows = applyFilters(rows);
-    if (currentPeriod === 'weekly') displayRows = groupByWeek(displayRows);
-
-    renderSummary(displayRows);
-    renderPlatformCards(displayRows);
-
-    // 광고단위 2개 선택 시 비교 패널
-    const selectedUnits = mcsAdunit ? mcsAdunit.getSelected() : [];
-    if (selectedUnits.length === 2) {
-      renderCompare(selectedUnits[0], selectedUnits[1]);
-    } else {
-      hideCompare();
+    let rowsA = applyFiltersA(rows);
+    let rowsB = applyFiltersB(rows);
+    if (currentPeriod === 'weekly') {
+      rowsA = groupByWeek(rowsA);
+      rowsB = rowsB.length ? groupByWeek(rowsB) : [];
     }
 
+    renderSummary(rowsA, rowsB);
+    renderPlatformCards(rowsA);
+
     requestAnimationFrame(() => {
-      renderTable(displayRows);
-      requestAnimationFrame(() => renderChart(displayRows));
+      renderTable(rowsA, rowsB);
+      requestAnimationFrame(() => renderChart(rowsA, rowsB));
     });
 
   } catch (err) {
@@ -628,124 +690,19 @@ async function fetchAndRender() {
   }
 }
 
-// ── 광고단위 비교 ─────────────────────────
-let compareChartInstance = null;
-const compareSection = document.getElementById('compare-section');
-const compareCards   = document.getElementById('compare-cards');
-
-function renderCompare(unitA, unitB) {
-  // 두 단위 각각의 행 수집
-  const rowsA = allRows.filter(r => r.adunitName === unitA);
-  const rowsB = allRows.filter(r => r.adunitName === unitB);
-
-  function summarize(rows) {
-    const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
-    const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
-    const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
-    const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
-    return {
-      profit,
-      impression: imp,
-      click:      clk,
-      request:    req,
-      ctr:        imp  ? (clk / imp * 100).toFixed(2) : '0.00',
-      impRpm:     imp  ? (profit / imp * 1000).toFixed(2) : '0.00',
-      reqRpm:     req  ? (profit / req * 1000).toFixed(2) : '0.00',
-      impRate:    req  ? (imp / req * 100).toFixed(2) : '0.00',
-    };
-  }
-
-  const sA = summarize(rowsA);
-  const sB = summarize(rowsB);
-
-  function card(name, s, colorClass) {
-    return `
-      <div class="compare-card ${colorClass}">
-        <div class="compare-card-title">${name}</div>
-        <div class="compare-stat-grid">
-          <div class="compare-stat"><span class="cs-label">총 수익</span><span class="cs-val">${won(s.profit)}</span></div>
-          <div class="compare-stat"><span class="cs-label">노출수</span><span class="cs-val">${comma(s.impression)}</span></div>
-          <div class="compare-stat"><span class="cs-label">클릭수</span><span class="cs-val">${comma(s.click)}</span></div>
-          <div class="compare-stat"><span class="cs-label">CTR</span><span class="cs-val">${s.ctr}%</span></div>
-          <div class="compare-stat"><span class="cs-label">노출 RPM</span><span class="cs-val">${s.impRpm}원</span></div>
-          <div class="compare-stat"><span class="cs-label">요청 RPM</span><span class="cs-val">${s.reqRpm}원</span></div>
-          <div class="compare-stat"><span class="cs-label">노출율</span><span class="cs-val">${s.impRate}%</span></div>
-        </div>
-      </div>`;
-  }
-
-  compareCards.innerHTML = card(unitA, sA, 'compare-a') + card(unitB, sB, 'compare-b');
-
-  // 날짜별 차트 (수익 기준)
-  const mapA = new Map(), mapB = new Map();
-  rowsA.forEach(r => {
-    const lbl = formatDate(r.day || r.month);
-    mapA.set(lbl, (mapA.get(lbl) || 0) + (r.profit || 0));
-  });
-  rowsB.forEach(r => {
-    const lbl = formatDate(r.day || r.month);
-    mapB.set(lbl, (mapB.get(lbl) || 0) + (r.profit || 0));
-  });
-  const labels = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
-  const dataA  = labels.map(l => mapA.get(l) || 0);
-  const dataB  = labels.map(l => mapB.get(l) || 0);
-
-  compareSection.style.display = '';
-
-  if (compareChartInstance) {
-    compareChartInstance.data.labels              = labels;
-    compareChartInstance.data.datasets[0].label   = unitA;
-    compareChartInstance.data.datasets[0].data    = dataA;
-    compareChartInstance.data.datasets[1].label   = unitB;
-    compareChartInstance.data.datasets[1].data    = dataB;
-    compareChartInstance.update('active');
-    return;
-  }
-
-  const ctx = document.getElementById('compare-chart').getContext('2d');
-  compareChartInstance = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: unitA, data: dataA, backgroundColor: 'rgba(26,115,232,0.55)', borderColor: 'rgba(26,115,232,1)', borderWidth: 1.5, borderRadius: 3 },
-        { label: unitB, data: dataB, backgroundColor: 'rgba(234,67,53,0.55)',  borderColor: 'rgba(234,67,53,1)',  borderWidth: 1.5, borderRadius: 3 }
-      ]
-    },
-    options: {
-      responsive: true,
-      animation: { duration: 400 },
-      plugins: {
-        legend: { display: true },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${won(ctx.parsed.y)}` } }
-      },
-      scales: { y: { ticks: { callback: v => won(v) } } }
-    }
-  });
-}
-
-function hideCompare() {
-  compareSection.style.display = 'none';
-  if (compareChartInstance) { compareChartInstance.destroy(); compareChartInstance = null; }
-}
-
 // ── 필터 변경 시 재렌더 ──────────────────
 function reRender() {
   if (allRows.length === 0) return;
-  let displayRows = applyFilters(allRows);
-  if (currentPeriod === 'weekly') displayRows = groupByWeek(displayRows);
-  renderSummary(displayRows);
-  renderPlatformCards(displayRows);
-  renderTable(displayRows);
-  renderChart(displayRows);
-
-  // 광고단위 2개 선택 시 비교 패널
-  const selectedUnits = mcsAdunit ? mcsAdunit.getSelected() : [];
-  if (selectedUnits.length === 2) {
-    renderCompare(selectedUnits[0], selectedUnits[1]);
-  } else {
-    hideCompare();
+  let rowsA = applyFiltersA(allRows);
+  let rowsB = applyFiltersB(allRows);
+  if (currentPeriod === 'weekly') {
+    rowsA = groupByWeek(rowsA);
+    rowsB = rowsB.length ? groupByWeek(rowsB) : [];
   }
+  renderSummary(rowsA, rowsB);
+  renderPlatformCards(rowsA);
+  renderTable(rowsA, rowsB);
+  renderChart(rowsA, rowsB);
 }
 
 searchBtn.addEventListener('click',  () => { saveState(); fetchAndRender(); });
@@ -785,6 +742,7 @@ class MultiCheckSelect {
         <span class="mcs-arrow">▾</span>
       </button>
       <div class="mcs-dropdown">
+        <div class="mcs-tags-wrap"><div class="mcs-tags"></div></div>
         <input class="mcs-search" type="text" placeholder="검색...">
         <div class="mcs-actions">
           <button type="button" class="mcs-btn-all">모두 선택</button>
@@ -846,9 +804,28 @@ class MultiCheckSelect {
     });
   }
 
+  _updateTags() {
+    const wrap = this.el.querySelector('.mcs-tags-wrap');
+    const tags = this.el.querySelector('.mcs-tags');
+    if (!wrap || !tags) return;
+    if (this.selected.size === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    tags.innerHTML = [...this.selected].map(v =>
+      `<span class="mcs-tag">${v}<button type="button" class="mcs-tag-x" data-val="${v.replace(/"/g,'&quot;')}">✕</button></span>`
+    ).join('');
+    tags.querySelectorAll('.mcs-tag-x').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this.selected.delete(btn.dataset.val);
+        this._renderItems(); this._updateLabel(); this.onChange();
+      });
+    });
+  }
+
   _updateLabel() {
     const n = this.selected.size;
     this._label.textContent = n === 0 ? this.placeholder : `${n}개 선택됨`;
+    this._updateTags();
   }
 
   refresh(options = []) {
@@ -879,6 +856,16 @@ function initMultiCheckSelects() {
     { value: 'App Android', label: 'App Android' },
   ]);
   if (pendingPlatforms.length) { mcsPlatform.setSelected(pendingPlatforms); pendingPlatforms = []; }
+  mcsCmpAdunit   = new MultiCheckSelect(document.getElementById('mcs-cmp-adunit'),    '전체 광고단위명',  () => { reRender(); });
+  mcsCmpAdunitId = new MultiCheckSelect(document.getElementById('mcs-cmp-adunit-id'), '전체 광고단위 ID', () => { reRender(); });
+  mcsCmpPlatform = new MultiCheckSelect(document.getElementById('mcs-cmp-platform'),  '전체 플랫폼',     () => { reRender(); });
+  mcsCmpPlatform.refresh([
+    { value: 'PC Web',      label: 'PC Web'      },
+    { value: 'Mobile Web',  label: 'Mobile Web'  },
+    { value: 'App 전체',    label: 'App 전체'    },
+    { value: 'App iOS',     label: 'App iOS'     },
+    { value: 'App Android', label: 'App Android' },
+  ]);
 }
 
 // ── Flatpickr 초기화 (캘린더 안 빠른 선택 버튼) ──

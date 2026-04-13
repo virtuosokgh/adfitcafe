@@ -179,6 +179,14 @@ header .subtitle strong {
   color: var(--text-sub);
   white-space: nowrap;
 }
+.compare-filter-row {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.filter-placeholder {
+  flex: 0 0 120px; /* matches search button width */
+}
 /* =========================================
    MultiCheckSelect (체크박스 복수선택 드롭다운)
    ========================================= */
@@ -281,6 +289,44 @@ header .subtitle strong {
 .mcs-item:hover { background: #EEF4FF; }
 .mcs-item input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 
+.mcs-tags-wrap {
+  padding: 6px 10px 0;
+}
+.mcs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.mcs-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px 2px 8px;
+  background: #EEF4FF;
+  color: var(--primary);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcs-tag-x {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.mcs-tag-x:hover { opacity: 1; }
+
 .search-btn {
   padding: 10px 28px;
   background: var(--primary);
@@ -337,6 +383,23 @@ header .subtitle strong {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cv-primary,
+.cv-compare {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+.cv-primary { color: var(--primary); }
+.cv-compare { color: #EA4335; font-size: 0.9em; }
+.cv-primary + .cv-compare {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
 }
 
 /* =========================================
@@ -383,75 +446,6 @@ header .subtitle strong {
   font-size: 12px;
   color: var(--text-sub);
   margin-top: 4px;
-}
-
-/* =========================================
-   광고단위 비교 패널
-   ========================================= */
-.compare-section {
-  margin-bottom: 24px;
-}
-.compare-section h2 {
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 14px;
-  color: var(--text);
-}
-.compare-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.compare-card {
-  background: var(--surface);
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
-}
-.compare-card.compare-a { border-color: rgba(26,115,232,0.5); }
-.compare-card.compare-b { border-color: rgba(234,67,53,0.5); }
-.compare-card-title {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  word-break: break-all;
-}
-.compare-a .compare-card-title { color: rgba(26,115,232,1); }
-.compare-b .compare-card-title { color: rgba(234,67,53,1); }
-.compare-stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.compare-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cs-label {
-  font-size: 11px;
-  color: var(--text-sub);
-  font-weight: 600;
-}
-.cs-val {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
-.compare-chart-wrap {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  box-shadow: var(--shadow);
-}
-@media (max-width: 600px) {
-  .compare-cards { grid-template-columns: 1fr; }
 }
 
 /* =========================================
@@ -602,6 +596,10 @@ tbody tr {
   transition: background 0.12s;
 }
 tbody tr:hover { background: #F0F4FF; }
+.tr-group-a { background: rgba(26,115,232,0.10); border-left: 3px solid rgba(26,115,232,0.5); }
+.tr-group-b { background: rgba(234,67,53,0.10); border-left: 3px solid rgba(234,67,53,0.5); }
+.tr-group-a:hover { background: rgba(26,115,232,0.18); }
+.tr-group-b:hover { background: rgba(234,67,53,0.18); }
 tbody td {
   padding: 8px 10px;
   text-align: right;
