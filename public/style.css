@@ -386,6 +386,75 @@ header .subtitle strong {
 }
 
 /* =========================================
+   광고단위 비교 패널
+   ========================================= */
+.compare-section {
+  margin-bottom: 24px;
+}
+.compare-section h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+.compare-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.compare-card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.compare-card.compare-a { border-color: rgba(26,115,232,0.5); }
+.compare-card.compare-b { border-color: rgba(234,67,53,0.5); }
+.compare-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  word-break: break-all;
+}
+.compare-a .compare-card-title { color: rgba(26,115,232,1); }
+.compare-b .compare-card-title { color: rgba(234,67,53,1); }
+.compare-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.compare-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cs-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+.cs-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.compare-chart-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+@media (max-width: 600px) {
+  .compare-cards { grid-template-columns: 1fr; }
+}
+
+/* =========================================
    상태 메시지
    ========================================= */
 .loading {

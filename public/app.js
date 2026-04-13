@@ -253,6 +253,7 @@ function clearUI() {
   platformSection.style.display = 'none';
   tableSection.style.display    = 'none';
   chartSection.style.display    = 'none';
+  compareSection.style.display  = 'none';
   resultBody.innerHTML          = '';
   platformCardsEl.innerHTML     = '';
 }
@@ -607,6 +608,14 @@ async function fetchAndRender() {
     renderSummary(displayRows);
     renderPlatformCards(displayRows);
 
+    // 광고단위 2개 선택 시 비교 패널
+    const selectedUnits = mcsAdunit ? mcsAdunit.getSelected() : [];
+    if (selectedUnits.length === 2) {
+      renderCompare(selectedUnits[0], selectedUnits[1]);
+    } else {
+      hideCompare();
+    }
+
     requestAnimationFrame(() => {
       renderTable(displayRows);
       requestAnimationFrame(() => renderChart(displayRows));
@@ -619,6 +628,107 @@ async function fetchAndRender() {
   }
 }
 
+// ── 광고단위 비교 ─────────────────────────
+let compareChartInstance = null;
+const compareSection = document.getElementById('compare-section');
+const compareCards   = document.getElementById('compare-cards');
+
+function renderCompare(unitA, unitB) {
+  // 두 단위 각각의 행 수집
+  const rowsA = allRows.filter(r => r.adunitName === unitA);
+  const rowsB = allRows.filter(r => r.adunitName === unitB);
+
+  function summarize(rows) {
+    const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
+    const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
+    const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
+    const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
+    return {
+      profit,
+      impression: imp,
+      click:      clk,
+      request:    req,
+      ctr:        imp  ? (clk / imp * 100).toFixed(2) : '0.00',
+      impRpm:     imp  ? (profit / imp * 1000).toFixed(2) : '0.00',
+      reqRpm:     req  ? (profit / req * 1000).toFixed(2) : '0.00',
+      impRate:    req  ? (imp / req * 100).toFixed(2) : '0.00',
+    };
+  }
+
+  const sA = summarize(rowsA);
+  const sB = summarize(rowsB);
+
+  function card(name, s, colorClass) {
+    return `
+      <div class="compare-card ${colorClass}">
+        <div class="compare-card-title">${name}</div>
+        <div class="compare-stat-grid">
+          <div class="compare-stat"><span class="cs-label">총 수익</span><span class="cs-val">${won(s.profit)}</span></div>
+          <div class="compare-stat"><span class="cs-label">노출수</span><span class="cs-val">${comma(s.impression)}</span></div>
+          <div class="compare-stat"><span class="cs-label">클릭수</span><span class="cs-val">${comma(s.click)}</span></div>
+          <div class="compare-stat"><span class="cs-label">CTR</span><span class="cs-val">${s.ctr}%</span></div>
+          <div class="compare-stat"><span class="cs-label">노출 RPM</span><span class="cs-val">${s.impRpm}원</span></div>
+          <div class="compare-stat"><span class="cs-label">요청 RPM</span><span class="cs-val">${s.reqRpm}원</span></div>
+          <div class="compare-stat"><span class="cs-label">노출율</span><span class="cs-val">${s.impRate}%</span></div>
+        </div>
+      </div>`;
+  }
+
+  compareCards.innerHTML = card(unitA, sA, 'compare-a') + card(unitB, sB, 'compare-b');
+
+  // 날짜별 차트 (수익 기준)
+  const mapA = new Map(), mapB = new Map();
+  rowsA.forEach(r => {
+    const lbl = formatDate(r.day || r.month);
+    mapA.set(lbl, (mapA.get(lbl) || 0) + (r.profit || 0));
+  });
+  rowsB.forEach(r => {
+    const lbl = formatDate(r.day || r.month);
+    mapB.set(lbl, (mapB.get(lbl) || 0) + (r.profit || 0));
+  });
+  const labels = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
+  const dataA  = labels.map(l => mapA.get(l) || 0);
+  const dataB  = labels.map(l => mapB.get(l) || 0);
+
+  compareSection.style.display = '';
+
+  if (compareChartInstance) {
+    compareChartInstance.data.labels              = labels;
+    compareChartInstance.data.datasets[0].label   = unitA;
+    compareChartInstance.data.datasets[0].data    = dataA;
+    compareChartInstance.data.datasets[1].label   = unitB;
+    compareChartInstance.data.datasets[1].data    = dataB;
+    compareChartInstance.update('active');
+    return;
+  }
+
+  const ctx = document.getElementById('compare-chart').getContext('2d');
+  compareChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: unitA, data: dataA, backgroundColor: 'rgba(26,115,232,0.55)', borderColor: 'rgba(26,115,232,1)', borderWidth: 1.5, borderRadius: 3 },
+        { label: unitB, data: dataB, backgroundColor: 'rgba(234,67,53,0.55)',  borderColor: 'rgba(234,67,53,1)',  borderWidth: 1.5, borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: true },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${won(ctx.parsed.y)}` } }
+      },
+      scales: { y: { ticks: { callback: v => won(v) } } }
+    }
+  });
+}
+
+function hideCompare() {
+  compareSection.style.display = 'none';
+  if (compareChartInstance) { compareChartInstance.destroy(); compareChartInstance = null; }
+}
+
 // ── 필터 변경 시 재렌더 ──────────────────
 function reRender() {
   if (allRows.length === 0) return;
@@ -628,6 +738,14 @@ function reRender() {
   renderPlatformCards(displayRows);
   renderTable(displayRows);
   renderChart(displayRows);
+
+  // 광고단위 2개 선택 시 비교 패널
+  const selectedUnits = mcsAdunit ? mcsAdunit.getSelected() : [];
+  if (selectedUnits.length === 2) {
+    renderCompare(selectedUnits[0], selectedUnits[1]);
+  } else {
+    hideCompare();
+  }
 }
 
 searchBtn.addEventListener('click',  () => { saveState(); fetchAndRender(); });

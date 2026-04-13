@@ -52,27 +52,16 @@
 
         <div class="filter-row">
           <div class="filter-area">
-            <label for="adunit-filter">광고단위명</label>
-            <select id="adunit-filter">
-              <option value="">전체 광고단위명</option>
-            </select>
+            <label>광고단위명</label>
+            <div id="mcs-adunit"></div>
           </div>
           <div class="filter-area">
-            <label for="adunit-id-filter">광고단위 ID</label>
-            <select id="adunit-id-filter">
-              <option value="">전체 광고단위 ID</option>
-            </select>
+            <label>광고단위 ID</label>
+            <div id="mcs-adunit-id"></div>
           </div>
           <div class="filter-area">
-            <label for="platform-filter">플랫폼</label>
-            <select id="platform-filter">
-              <option value="">전체 플랫폼</option>
-              <option value="PC Web">PC Web</option>
-              <option value="Mobile Web">Mobile Web</option>
-              <option value="App 전체">App 전체</option>
-              <option value="App iOS">App iOS</option>
-              <option value="App Android">App Android</option>
-            </select>
+            <label>플랫폼</label>
+            <div id="mcs-platform"></div>
           </div>
           <button id="search-btn" class="search-btn">조회</button>
         </div>
@@ -160,6 +149,14 @@
           </table>
         </div>
       </div>
+      <!-- 광고단위 비교 패널 (광고단위명 2개 선택 시 자동 표시) -->
+      <div class="compare-section" id="compare-section" style="display:none;">
+        <h2>광고단위 비교</h2>
+        <div class="compare-cards" id="compare-cards"></div>
+        <div class="compare-chart-wrap">
+          <canvas id="compare-chart"></canvas>
+        </div>
+      </div>
     </div><!-- /adfit-section -->
 
     <!-- ========== 네이버 섹션 ========== -->
@@ -219,10 +216,8 @@
         <!-- 필터 -->
         <div class="filter-row">
           <div class="filter-area">
-            <label for="naver-adid-filter">광고ID</label>
-            <select id="naver-adid-filter">
-              <option value="">전체 광고ID</option>
-            </select>
+            <label>광고ID</label>
+            <div id="mcs-naver-adid"></div>
           </div>
         </div>
       </div>
