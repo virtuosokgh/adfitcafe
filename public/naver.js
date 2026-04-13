@@ -14,11 +14,18 @@ let naverSortCol       = null;
 let naverSortDir       = 1;
 let naverCurrentPeriod = 'daily';
 let naverMcsAdId       = null;
+let naverMcsCmpAdId    = null; // 비교 광고ID MCS
+let naverChartMetric   = 'profit'; // 차트 지표
+let naverCmpFpStartD   = null; // 비교 시작일
+let naverCmpFpEndD     = null; // 비교 종료일
 let naverFpStartD = null, naverFpEndD = null;
 let naverFpStartW = null, naverFpEndW = null;
 let naverFpStartM = null, naverFpEndM = null;
 
 // ── DOM 참조 ──────────────────────────────
+const naverCmpStartDateEl = document.getElementById('naver-cmp-start-d');
+const naverCmpEndDateEl   = document.getElementById('naver-cmp-end-d');
+const naverCmpClearBtn    = document.getElementById('naver-cmp-date-clear');
 const pnavBtns             = document.querySelectorAll('.pnav-btn');
 const adfitSection         = document.getElementById('adfit-section');
 const naverSection         = document.getElementById('naver-section');
@@ -223,10 +230,66 @@ function naverGroupByMonth(rows) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// ── 차트 지표 헬퍼 (naver) ───────────────
+function naverGetMetricValue(row, metric) {
+  switch (metric) {
+    case 'profit':     return row.profit     || 0;
+    case 'impression': return row.impression || 0;
+    case 'click':      return row.click      || 0;
+    case 'ctr':        return row.impression ? (row.click / row.impression * 100) : 0;
+    case 'impRpm':     return row.impression ? (row.profit / row.impression * 1000) : 0;
+    case 'reqRpm':     return row.request    ? (row.profit / row.request * 1000) : 0;
+    case 'impRate':    return row.request    ? (row.impression / row.request * 100) : 0;
+    default: return 0;
+  }
+}
+function naverGetMetricLabel(metric) {
+  switch (metric) {
+    case 'profit':     return '수익 (원)';
+    case 'impression': return '노출수';
+    case 'click':      return '클릭수';
+    case 'ctr':        return 'CTR (%)';
+    case 'impRpm':     return '노출 RPM';
+    case 'reqRpm':     return '요청 RPM';
+    case 'impRate':    return '노출율 (%)';
+    default: return metric;
+  }
+}
+function naverFormatMetricValue(v, metric) {
+  switch (metric) {
+    case 'profit':     return won(Math.round(v));
+    case 'impression':
+    case 'click':      return comma(Math.round(v));
+    case 'ctr':
+    case 'impRate':    return v.toFixed(2) + '%';
+    case 'impRpm':
+    case 'reqRpm':     return comma(Math.round(v)) + '원';
+    default: return String(v);
+  }
+}
+
+// ── 비교 기간 필터 적용 ──────────────────
+function applyNaverFiltersB() {
+  const hasCmpDates = !!(naverCmpStartDateEl.value && naverCmpEndDateEl.value);
+  const adIds = naverMcsCmpAdId ? naverMcsCmpAdId.getSelected() : [];
+  if (!hasCmpDates && !adIds.length) return [];
+  let rows = [...naverAllRows];
+  if (hasCmpDates) {
+    const s = naverCmpStartDateEl.value, e = naverCmpEndDateEl.value;
+    rows = rows.filter(r => {
+      const d = r.isMonthly ? r.date + '-01' : r.date;
+      return d >= s && d <= e;
+    });
+  }
+  if (adIds.length) rows = rows.filter(r => adIds.includes(r.adId));
+  return rows;
+}
+
 // ── 필터 옵션 업데이트 ─────────────────────
 function updateNaverFilters(rows) {
   const adIds = [...new Set(rows.map(r => r.adId).filter(Boolean))].sort();
   if (naverMcsAdId) naverMcsAdId.refresh(adIds);
+  if (naverMcsCmpAdId) naverMcsCmpAdId.refresh(adIds);
 }
 
 function applyNaverFilters(rows) {
@@ -234,6 +297,8 @@ function applyNaverFilters(rows) {
   if (!adIds.length) return rows;
   return rows.filter(r => adIds.includes(r.adId));
 }
+// alias for symmetry
+function applyNaverFiltersA(rows) { return applyNaverFilters(rows); }
 
 // ── 복사 버튼 ────────────────────────────
 function naverCopyBtn(rawValue) {
@@ -241,23 +306,46 @@ function naverCopyBtn(rawValue) {
 }
 
 // ── 요약 카드 ─────────────────────────────
-function renderNaverSummary(rows) {
-  const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
-  const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
-  const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
-  const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
-  const ctrNum = imp ? ((clk / imp) * 100).toFixed(2) : '0.00';
-  const impRpmVal  = Math.round(calcImpRpm(profit, imp));
-  const reqRpmVal  = Math.round(calcReqRpm(profit, req));
-  const impRateNum = req ? ((imp / req) * 100).toFixed(2) : '0.00';
+function renderNaverSummary(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
+  function stats(rows) {
+    const profit = rows.reduce((s, r) => s + (r.profit     || 0), 0);
+    const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
+    const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
+    const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
+    return { profit, imp, req, clk,
+      ctr:     imp ? ((clk / imp) * 100).toFixed(2) : '0.00',
+      impRpm:  Math.round(calcImpRpm(profit, imp)),
+      reqRpm:  Math.round(calcReqRpm(profit, req)),
+      impRate: req ? ((imp / req) * 100).toFixed(2) : '0.00',
+    };
+  }
+  const a = stats(rowsA);
+  const b = hasCmp ? stats(rowsB) : null;
+  const tA = '기본 필터', tB = '비교 필터';
 
-  document.getElementById('naver-total-profit').innerHTML     = `<span>${won(profit)}</span>${naverCopyBtn(profit)}`;
-  document.getElementById('naver-total-impression').innerHTML = `<span>${comma(imp)}</span>${naverCopyBtn(imp)}`;
-  document.getElementById('naver-total-click').innerHTML      = `<span>${comma(clk)}</span>${naverCopyBtn(clk)}`;
-  document.getElementById('naver-total-ctr').innerHTML        = `<span>${ctrNum}%</span>`;
-  document.getElementById('naver-total-imp-rpm').innerHTML    = `<span>${won(impRpmVal)}</span>${naverCopyBtn(impRpmVal)}`;
-  document.getElementById('naver-total-req-rpm').innerHTML    = `<span>${won(reqRpmVal)}</span>${naverCopyBtn(reqRpmVal)}`;
-  document.getElementById('naver-total-imp-rate').innerHTML   = `<span>${impRateNum}%</span>`;
+  function setEl(id, aVal, aRaw, bVal, bRaw) {
+    const el = document.getElementById(id); if (!el) return;
+    if (!hasCmp) { el.innerHTML = `<span>${aVal}</span>${naverCopyBtn(aRaw)}`; return; }
+    el.innerHTML =
+      `<span class="cv-primary" title="${tA}"><span>${aVal}</span>${naverCopyBtn(aRaw)}</span>` +
+      `<span class="cv-compare" title="${tB}"><span>${bVal}</span>${naverCopyBtn(bRaw)}</span>`;
+  }
+  function setElNoCopy(id, aVal, bVal) {
+    const el = document.getElementById(id); if (!el) return;
+    if (!hasCmp) { el.innerHTML = `<span>${aVal}</span>`; return; }
+    el.innerHTML =
+      `<span class="cv-primary" title="${tA}"><span>${aVal}</span></span>` +
+      `<span class="cv-compare" title="${tB}"><span>${bVal}</span></span>`;
+  }
+
+  setEl('naver-total-profit',     won(a.profit),    a.profit,    hasCmp ? won(b.profit)    : '', hasCmp ? b.profit    : 0);
+  setEl('naver-total-impression', comma(a.imp),     a.imp,       hasCmp ? comma(b.imp)     : '', hasCmp ? b.imp       : 0);
+  setEl('naver-total-click',      comma(a.clk),     a.clk,       hasCmp ? comma(b.clk)     : '', hasCmp ? b.clk       : 0);
+  setElNoCopy('naver-total-ctr',  a.ctr + '%',      hasCmp ? b.ctr + '%' : '');
+  setEl('naver-total-imp-rpm',    won(a.impRpm),    a.impRpm,    hasCmp ? won(b.impRpm)    : '', hasCmp ? b.impRpm    : 0);
+  setEl('naver-total-req-rpm',    won(a.reqRpm),    a.reqRpm,    hasCmp ? won(b.reqRpm)    : '', hasCmp ? b.reqRpm    : 0);
+  setElNoCopy('naver-total-imp-rate', a.impRate + '%', hasCmp ? b.impRate + '%' : '');
   naverSummaryCards.style.display = '';
 }
 
@@ -323,19 +411,24 @@ function updateNaverSortHeaders() {
 }
 
 // ── 테이블 렌더 ────────────────────────────
-function renderNaverTable(rows) {
-  const totalP = rows.reduce((s, r) => s + (r.profit || 0), 0);
-  rows.forEach(r => {
+function renderNaverTable(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
+  const totalP = rowsA.reduce((s, r) => s + (r.profit || 0), 0);
+  function prepRow(r) {
     r._profitPct = totalP > 0 ? (r.profit || 0) / totalP * 100 : 0;
-    // 일별 rows는 impRpm/reqRpm 계산 (그룹핑 후 rows는 이미 계산됨)
     if (r.impRpm === undefined) r.impRpm = calcImpRpm(r.profit, r.impression);
     if (r.reqRpm === undefined) r.reqRpm = calcReqRpm(r.profit, r.request);
-  });
-  const sorted = naverSortRows(rows);
+    return r;
+  }
+  const combined = [
+    ...rowsA.map(r => ({ ...prepRow(r), _group: 'a' })),
+    ...(hasCmp ? rowsB.map(r => ({ ...prepRow(r), _group: 'b' })) : [])
+  ];
+  const sorted = naverSortRows(combined);
   updateNaverSortHeaders();
-  naverRowCountEl.textContent = `총 ${sorted.length}건`;
+  naverRowCountEl.textContent = `총 ${rowsA.length}건${hasCmp ? ` + 비교 ${rowsB.length}건` : ''}`;
   naverResultBody.innerHTML = sorted.map(r => `
-    <tr>
+    <tr class="${r._group === 'a' ? 'tr-group-a' : 'tr-group-b'}" title="${r._group === 'a' ? '기본 필터' : '비교 필터'}">
       <td>${r.date || '-'}</td>
       <td>${r.adId || '-'}</td>
       <td>${r.media || '-'}</td>
@@ -354,37 +447,63 @@ function renderNaverTable(rows) {
 }
 
 // ── 차트 렌더 ─────────────────────────────
-function renderNaverChart(rows) {
-  const map = new Map();
-  rows.forEach(r => { map.set(r.date || '-', (map.get(r.date || '-') || 0) + (r.profit || 0)); });
-  const labels = [...map.keys()].sort();
-  const data   = labels.map(l => map.get(l));
+function renderNaverChart(rowsA, rowsB = []) {
+  const hasCmp = rowsB.length > 0;
+  function buildMap(rows) {
+    const raw = new Map();
+    rows.forEach(r => {
+      const label = r.date || '-';
+      if (!raw.has(label)) raw.set(label, { profit: 0, impression: 0, click: 0, request: 0 });
+      const g = raw.get(label);
+      g.profit     += r.profit     || 0;
+      g.impression += r.impression || 0;
+      g.click      += r.click      || 0;
+      g.request    += r.request    || 0;
+    });
+    const map = new Map();
+    raw.forEach((g, label) => map.set(label, naverGetMetricValue(g, naverChartMetric)));
+    return map;
+  }
+  const mapA   = buildMap(rowsA);
+  const mapB   = hasCmp ? buildMap(rowsB) : new Map();
+  const labels = [...new Set([...mapA.keys(), ...mapB.keys()])].sort();
+  const dataA  = labels.map(l => mapA.get(l) || 0);
+  const dataB  = labels.map(l => mapB.get(l) || 0);
+
+  const chartTitle = naverGetMetricLabel(naverChartMetric);
+  const h2 = document.getElementById('naver-chart-title-h2');
+  if (h2) h2.textContent = `날짜별 ${chartTitle} 추이`;
+  const tooltipFmt = (ctx) => `${ctx.dataset.label}: ${naverFormatMetricValue(ctx.parsed.y, naverChartMetric)}`;
+  const yTickFmt   = (v)   => naverFormatMetricValue(v, naverChartMetric);
+
+  const datasets = [
+    { label: '기본 필터', data: dataA, backgroundColor: 'rgba(3,199,90,0.45)', borderColor: 'rgba(3,199,90,1)', borderWidth: 1.5, borderRadius: 4 },
+    ...(hasCmp ? [{ label: '비교 필터', data: dataB, backgroundColor: 'rgba(234,67,53,0.45)', borderColor: 'rgba(234,67,53,1)', borderWidth: 1.5, borderRadius: 4 }] : [])
+  ];
+
   naverChartSection.style.display = '';
   if (naverChartInstance) {
-    naverChartInstance.data.labels           = labels;
-    naverChartInstance.data.datasets[0].data = data;
+    naverChartInstance.data.labels   = labels;
+    naverChartInstance.data.datasets = datasets;
+    naverChartInstance.options.plugins.legend.display = hasCmp;
+    naverChartInstance.options.plugins.title.text = chartTitle;
+    naverChartInstance.options.plugins.tooltip.callbacks.label = tooltipFmt;
+    naverChartInstance.options.scales.y.ticks.callback = yTickFmt;
     naverChartInstance.update('active');
     return;
   }
   const ctx = document.getElementById('naver-profit-chart').getContext('2d');
   naverChartInstance = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'AXZ매출 (원)', data,
-        backgroundColor: 'rgba(3,199,90,0.45)',
-        borderColor: 'rgba(3,199,90,1)',
-        borderWidth: 1.5, borderRadius: 4
-      }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true, animation: { duration: 400 },
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => won(ctx.parsed.y) } }
+        legend: { display: hasCmp },
+        title: { display: true, text: chartTitle, font: { size: 13, weight: '600' }, color: '#6B7280', padding: { bottom: 8 } },
+        tooltip: { callbacks: { label: tooltipFmt } }
       },
-      scales: { y: { ticks: { callback: v => won(v) } } }
+      scales: { y: { ticks: { callback: yTickFmt } } }
     }
   });
 }
@@ -392,14 +511,21 @@ function renderNaverChart(rows) {
 // ── 전체 재렌더 ────────────────────────────
 function naverReRender() {
   if (naverAllRows.length === 0) return;
-  let rows = applyNaverDateFilter(naverAllRows);
-  rows = applyNaverFilters(rows);
-  if (naverCurrentPeriod === 'weekly')  rows = naverGroupByWeek(rows);
-  if (naverCurrentPeriod === 'monthly') rows = naverGroupByMonth(rows);
-  renderNaverSummary(rows);
-  renderNaverPlatformCards(rows);
-  renderNaverTable(rows);
-  renderNaverChart(rows);
+  let rowsA = applyNaverDateFilter(naverAllRows);
+  rowsA = applyNaverFilters(rowsA);
+  if (naverCurrentPeriod === 'weekly')  rowsA = naverGroupByWeek(rowsA);
+  if (naverCurrentPeriod === 'monthly') rowsA = naverGroupByMonth(rowsA);
+
+  let rowsB = applyNaverFiltersB();
+  if (rowsB.length) {
+    if (naverCurrentPeriod === 'weekly')  rowsB = naverGroupByWeek(rowsB);
+    if (naverCurrentPeriod === 'monthly') rowsB = naverGroupByMonth(rowsB);
+  }
+
+  renderNaverSummary(rowsA, rowsB);
+  renderNaverPlatformCards(rowsA);
+  renderNaverTable(rowsA, rowsB);
+  renderNaverChart(rowsA, rowsB);
 }
 
 // ── CSV 다운로드 ──────────────────────────
@@ -625,6 +751,35 @@ function initNaverFlatpickr() {
     },
     onReady(_, __, fp) { addPairedShortcuts(fp.calendarContainer, monthlyShortcuts); }
   });
+
+  // ─── 비교 기간 ─────────────────────────
+  naverCmpFpStartD = flatpickr(naverCmpStartDateEl, {
+    ...baseOpts,
+    placeholder: '날짜 선택',
+    onChange(selectedDates) {
+      if (selectedDates[0] && naverCmpFpEndD.selectedDates[0] && selectedDates[0] > naverCmpFpEndD.selectedDates[0]) {
+        naverCmpFpEndD.setDate(selectedDates[0], false);
+      }
+      naverReRender();
+      setTimeout(() => naverCmpFpEndD.open(), 50);
+    }
+  });
+  naverCmpFpEndD = flatpickr(naverCmpEndDateEl, {
+    ...baseOpts,
+    placeholder: '날짜 선택',
+    onChange(selectedDates) {
+      if (selectedDates[0] && naverCmpFpStartD.selectedDates[0] && selectedDates[0] < naverCmpFpStartD.selectedDates[0]) {
+        naverCmpFpStartD.setDate(selectedDates[0], false);
+      }
+      naverReRender();
+    }
+  });
+
+  naverCmpClearBtn.addEventListener('click', () => {
+    naverCmpFpStartD.clear(); naverCmpFpEndD.clear();
+    if (naverMcsCmpAdId) naverMcsCmpAdId.setSelected([]);
+    naverReRender();
+  });
 }
 
 // ── CSV 데이터 기반 날짜 초기값 설정 ────────
@@ -680,6 +835,9 @@ function handleNaverFile(file) {
     if (!naverMcsAdId) {
       naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
     }
+    if (!naverMcsCmpAdId) {
+      naverMcsCmpAdId = new MultiCheckSelect(document.getElementById('mcs-naver-cmp-adid'), '전체 광고ID', naverReRender);
+    }
     updateNaverFilters(rows);
     setNaverDatesFromData();
     naverReRender();
@@ -705,6 +863,7 @@ naverUploadZone.addEventListener('drop', e => {
 // ── 파일 리셋 ─────────────────────────────
 naverFileResetBtn.addEventListener('click', () => {
   naverAllRows = [];
+  naverChartMetric = 'profit';
   if (naverChartInstance) { naverChartInstance.destroy(); naverChartInstance = null; }
   naverSortCol = null; naverSortDir = 1;
   naverUploadZone.classList.remove('hidden');
@@ -718,8 +877,23 @@ naverFileResetBtn.addEventListener('click', () => {
   naverResultBody.innerHTML    = '';
   naverPlatformCards.innerHTML = '';
   if (naverMcsAdId) naverMcsAdId.refresh([]);
+  if (naverMcsCmpAdId) naverMcsCmpAdId.refresh([]);
+  if (naverCmpFpStartD) naverCmpFpStartD.clear();
+  if (naverCmpFpEndD) naverCmpFpEndD.clear();
+  // naver-summary-cards chart-active 초기화
+  document.querySelectorAll('#naver-summary-cards .card').forEach((c, i) => c.classList.toggle('chart-active', i === 0));
   localStorage.removeItem(NAVER_CACHE_KEY); // 캐시 삭제
   switchNaverPeriod('daily');
+});
+
+// ── 요약 카드 클릭 → 차트 지표 전환 ─────
+document.getElementById('naver-summary-cards').addEventListener('click', e => {
+  const card = e.target.closest('.card[data-metric]');
+  if (!card || naverAllRows.length === 0) return;
+  naverChartMetric = card.dataset.metric;
+  document.querySelectorAll('#naver-summary-cards .card').forEach(c => c.classList.remove('chart-active'));
+  card.classList.add('chart-active');
+  naverReRender();
 });
 
 // ── 테이블 정렬 ───────────────────────────
@@ -751,6 +925,9 @@ function loadNaverFromCache() {
     naverControls.style.display     = '';
     if (!naverMcsAdId) {
       naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
+    }
+    if (!naverMcsCmpAdId) {
+      naverMcsCmpAdId = new MultiCheckSelect(document.getElementById('mcs-naver-cmp-adid'), '전체 광고ID', naverReRender);
     }
     updateNaverFilters(rows);
     setNaverDatesFromData();

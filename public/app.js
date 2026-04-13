@@ -673,6 +673,8 @@ function renderChart(rowsA, rowsB = []) {
   chartSection.style.display = '';
 
   const chartTitle = getMetricLabel(chartMetric);
+  const h2 = document.getElementById('chart-title-h2');
+  if (h2) h2.textContent = `날짜별 ${chartTitle} 추이`;
   const tooltipFmt = (ctx) => `${ctx.dataset.label}: ${formatMetricValue(ctx.parsed.y, chartMetric)}`;
   const yTickFmt   = (v)   => formatMetricValue(v, chartMetric);
 
@@ -854,11 +856,10 @@ class MultiCheckSelect {
         <span class="mcs-arrow">▾</span>
       </button>
       <div class="mcs-dropdown">
-        <div class="mcs-tags-wrap"><div class="mcs-tags"></div></div>
         <input class="mcs-search" type="text" placeholder="검색...">
         <div class="mcs-actions">
-          <button type="button" class="mcs-btn-all">모두 선택</button>
-          <button type="button" class="mcs-btn-none">모두 지우기</button>
+          <button type="button" class="mcs-btn-all">전체 선택</button>
+          <button type="button" class="mcs-btn-none">전체 지우기</button>
         </div>
         <div class="mcs-list"></div>
       </div>`;
@@ -916,28 +917,14 @@ class MultiCheckSelect {
     });
   }
 
-  _updateTags() {
-    const wrap = this.el.querySelector('.mcs-tags-wrap');
-    const tags = this.el.querySelector('.mcs-tags');
-    if (!wrap || !tags) return;
-    if (this.selected.size === 0) { wrap.style.display = 'none'; return; }
-    wrap.style.display = '';
-    tags.innerHTML = [...this.selected].map(v =>
-      `<span class="mcs-tag">${v}<button type="button" class="mcs-tag-x" data-val="${v.replace(/"/g,'&quot;')}">✕</button></span>`
-    ).join('');
-    tags.querySelectorAll('.mcs-tag-x').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        this.selected.delete(btn.dataset.val);
-        this._renderItems(); this._updateLabel(); this.onChange();
-      });
-    });
-  }
-
   _updateLabel() {
     const n = this.selected.size;
-    this._label.textContent = n === 0 ? this.placeholder : `${n}개 선택됨`;
-    this._updateTags();
+    const total = this.options.length;
+    if (n === 0 || n === total) {
+      this._label.textContent = this.placeholder;
+    } else {
+      this._label.textContent = `${n}개 선택됨`;
+    }
   }
 
   refresh(options = []) {
