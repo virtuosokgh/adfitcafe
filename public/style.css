@@ -381,6 +381,22 @@ header .subtitle strong {
   padding: 20px;
   box-shadow: var(--shadow);
 }
+.card[data-metric] {
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.12s, border-color 0.15s;
+}
+.card[data-metric]:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 16px rgba(26,115,232,0.18);
+  transform: translateY(-1px);
+}
+.card.chart-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow);
+}
+.card.total.chart-active {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--primary);
+}
 .card.total {
   background: linear-gradient(135deg, #1A73E8 0%, #0D47A1 100%);
   border-color: transparent;

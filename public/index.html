@@ -95,33 +95,33 @@
       </div>
       </div>
 
-      <!-- 요약 카드 -->
+      <!-- 요약 카드 (클릭 시 해당 지표 차트 표시) -->
       <div class="summary-cards" id="summary-cards" style="display:none;">
-        <div class="card total">
+        <div class="card total chart-active" data-metric="profit">
           <div class="card-label">총 수익 (적립금)</div>
           <div class="card-value" id="total-profit">0원</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="impression">
           <div class="card-label">총 노출 수</div>
           <div class="card-value" id="total-impression">0</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="click">
           <div class="card-label">총 클릭 수</div>
           <div class="card-value" id="total-click">0</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="ctr">
           <div class="card-label">클릭률 (CTR)</div>
           <div class="card-value" id="total-ctr">0%</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="impRpm">
           <div class="card-label">노출 RPM(eCPM)</div>
           <div class="card-value" id="total-imp-rpm">0원</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="reqRpm">
           <div class="card-label">요청 RPM(요청 eCPM)</div>
           <div class="card-value" id="total-req-rpm">0원</div>
         </div>
-        <div class="card">
+        <div class="card" data-metric="impRate">
           <div class="card-label">노출율</div>
           <div class="card-value" id="total-imp-rate">0%</div>
         </div>

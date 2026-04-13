@@ -27,6 +27,7 @@ let mcsCmpPlatform = null;  // 비교 MultiCheckSelect (플랫폼)
 let allRowsB   = [];   // 비교 기간 데이터
 let cmpFpStart = null; // 비교 기간 Flatpickr 시작
 let cmpFpEnd   = null; // 비교 기간 Flatpickr 종료
+let chartMetric = 'profit'; // 차트에 표시할 지표
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -599,16 +600,62 @@ function downloadCSV() {
 
 csvBtn.addEventListener('click', downloadCSV);
 
+// ── 차트 지표 헬퍼 ───────────────────────
+function getMetricValue(row, metric) {
+  switch (metric) {
+    case 'profit':     return row.profit     || 0;
+    case 'impression': return row.impression || 0;
+    case 'click':      return row.click      || 0;
+    case 'ctr':        return row.impression ? (row.click / row.impression * 100) : 0;
+    case 'impRpm':     return row.impression ? (row.profit / row.impression * 1000) : 0;
+    case 'reqRpm':     return row.request    ? (row.profit / row.request * 1000) : 0;
+    case 'impRate':    return row.request    ? (row.impression / row.request * 100) : 0;
+    default: return 0;
+  }
+}
+function getMetricLabel(metric) {
+  switch (metric) {
+    case 'profit':     return '수익 (원)';
+    case 'impression': return '노출수';
+    case 'click':      return '클릭수';
+    case 'ctr':        return 'CTR (%)';
+    case 'impRpm':     return '노출 RPM';
+    case 'reqRpm':     return '요청 RPM';
+    case 'impRate':    return '노출율 (%)';
+    default: return metric;
+  }
+}
+function formatMetricValue(v, metric) {
+  switch (metric) {
+    case 'profit':     return won(Math.round(v));
+    case 'impression':
+    case 'click':      return comma(Math.round(v));
+    case 'ctr':
+    case 'impRate':    return v.toFixed(2) + '%';
+    case 'impRpm':
+    case 'reqRpm':     return comma(Math.round(v)) + '원';
+    default: return String(v);
+  }
+}
+
 // ── 차트 렌더 ────────────────────────────
 function renderChart(rowsA, rowsB = []) {
   const hasCmp = rowsB.length > 0;
 
   function buildMap(rows) {
-    const map = new Map();
+    // 먼저 날짜별로 profit/impression/click/request 합산 후, 지표값 계산
+    const raw = new Map();
     rows.forEach(r => {
       const label = currentPeriod === 'weekly' ? (r._weekLabel || '-') : formatDate(r.day || r.month);
-      map.set(label, (map.get(label) || 0) + (r.profit || 0));
+      if (!raw.has(label)) raw.set(label, { profit: 0, impression: 0, click: 0, request: 0 });
+      const g = raw.get(label);
+      g.profit     += r.profit     || 0;
+      g.impression += r.impression || 0;
+      g.click      += r.click      || 0;
+      g.request    += r.request    || 0;
     });
+    const map = new Map();
+    raw.forEach((g, label) => map.set(label, getMetricValue(g, chartMetric)));
     return map;
   }
 
@@ -625,10 +672,17 @@ function renderChart(rowsA, rowsB = []) {
 
   chartSection.style.display = '';
 
+  const chartTitle = getMetricLabel(chartMetric);
+  const tooltipFmt = (ctx) => `${ctx.dataset.label}: ${formatMetricValue(ctx.parsed.y, chartMetric)}`;
+  const yTickFmt   = (v)   => formatMetricValue(v, chartMetric);
+
   if (chartInstance) {
     chartInstance.data.labels   = labels;
     chartInstance.data.datasets = datasets;
     chartInstance.options.plugins.legend.display = hasCmp;
+    chartInstance.options.plugins.title.text = chartTitle;
+    chartInstance.options.plugins.tooltip.callbacks.label = tooltipFmt;
+    chartInstance.options.scales.y.ticks.callback = yTickFmt;
     chartInstance.update('active');
     return;
   }
@@ -642,9 +696,10 @@ function renderChart(rowsA, rowsB = []) {
       animation: { duration: 400 },
       plugins: {
         legend: { display: hasCmp },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${won(ctx.parsed.y)}` } }
+        title: { display: true, text: chartTitle, font: { size: 13, weight: '600' }, color: '#6B7280', padding: { bottom: 8 } },
+        tooltip: { callbacks: { label: tooltipFmt } }
       },
-      scales: { y: { ticks: { callback: v => won(v) } } }
+      scales: { y: { ticks: { callback: yTickFmt } } }
     }
   });
 }
@@ -748,6 +803,22 @@ function reRender() {
 
 searchBtn.addEventListener('click',  () => { saveState(); fetchAndRender(); });
 document.addEventListener('keydown', e => { if (e.key === 'Enter') { saveState(); fetchAndRender(); } });
+
+// ── 요약 카드 클릭 → 차트 지표 전환 ─────────
+document.getElementById('summary-cards').addEventListener('click', e => {
+  const card = e.target.closest('.card[data-metric]');
+  if (!card || allRows.length === 0) return;
+  chartMetric = card.dataset.metric;
+  document.querySelectorAll('#summary-cards .card').forEach(c => c.classList.remove('chart-active'));
+  card.classList.add('chart-active');
+  let rowsA = applyFiltersA(allRows);
+  let rowsB = applyFiltersB();
+  if (currentPeriod === 'weekly') {
+    rowsA = groupByWeek(rowsA);
+    rowsB = rowsB.length ? groupByWeek(rowsB) : [];
+  }
+  renderChart(rowsA, rowsB);
+});
 
 // ── 테이블 헤더 정렬 클릭 ─────────────────
 document.querySelector('#result-table thead').addEventListener('click', e => {
