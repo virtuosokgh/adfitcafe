@@ -9,17 +9,18 @@ let chartInstance = null;
 const apiCache = new Map();   // API 응답 캐시 (같은 조건 재조회 시 즉시 반환)
 let sortCol = null;           // 현재 정렬 컬럼 키
 let sortDir = 1;              // 1=오름차순, -1=내림차순
-let pendingAdunit   = '';     // 새로고침 복원용 광고단위명 임시 저장
-let pendingAdunitId = '';     // 새로고침 복원용 광고단위 ID 임시 저장
+let pendingAdunits   = [];    // 새로고침 복원용 광고단위명 배열 임시 저장
+let pendingAdunitIds = [];   // 새로고침 복원용 광고단위 ID 배열 임시 저장
+let pendingPlatforms = [];   // 새로고침 복원용 플랫폼 배열 임시 저장
 let fpStart  = null;          // 일별 Flatpickr 시작일
 let fpEnd    = null;          // 일별 Flatpickr 종료일
 let fpStartW = null;          // 주별 Flatpickr 시작
 let fpEndW   = null;          // 주별 Flatpickr 종료
 let fpStartM = null;          // 월별 Flatpickr 시작
 let fpEndM   = null;          // 월별 Flatpickr 종료
-let ssAdunit   = null;        // SearchableSelect 인스턴스 (광고단위명)
-let ssAdunitId = null;        // SearchableSelect 인스턴스 (광고단위 ID)
-let ssPlatform = null;        // SearchableSelect 인스턴스 (플랫폼)
+let mcsAdunit   = null;       // MultiCheckSelect 인스턴스 (광고단위명)
+let mcsAdunitId = null;       // MultiCheckSelect 인스턴스 (광고단위 ID)
+let mcsPlatform = null;       // MultiCheckSelect 인스턴스 (플랫폼)
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -116,9 +117,6 @@ const startDateW     = document.getElementById('start-date-w');
 const endDateW       = document.getElementById('end-date-w');
 const startDateM     = document.getElementById('start-date-m');
 const endDateM       = document.getElementById('end-date-m');
-const adunitFilter   = document.getElementById('adunit-filter');
-const adunitIdFilter = document.getElementById('adunit-id-filter');
-const platformFilter = document.getElementById('platform-filter');
 const searchBtn      = document.getElementById('search-btn');
 const loadingEl      = document.getElementById('loading');
 const errorEl        = document.getElementById('error-msg');
@@ -165,9 +163,9 @@ function saveState() {
     endW:      endDateW.value,
     startM:    startDateM.value,
     endM:      endDateM.value,
-    adunit:    adunitFilter.value,
-    adunitId:  adunitIdFilter.value,
-    platform:  platformFilter.value,
+    adunits:   mcsAdunit   ? mcsAdunit.getSelected()   : [],
+    adunitIds: mcsAdunitId ? mcsAdunitId.getSelected() : [],
+    platforms: mcsPlatform ? mcsPlatform.getSelected() : [],
     sortCol:   sortCol,
     sortDir:   sortDir
   }));
@@ -200,9 +198,9 @@ function restoreState() {
         endDateM.value = monthRange(d).end;
       }
 
-      if (s.platform)  platformFilter.value = s.platform;  // 정적 옵션이므로 바로 복원
-      if (s.adunit)    pendingAdunit         = s.adunit;    // 동적 옵션: 조회 후 복원
-      if (s.adunitId)  pendingAdunitId       = s.adunitId;  // 동적 옵션: 조회 후 복원
+      pendingAdunits   = Array.isArray(s.adunits)   ? s.adunits   : (s.adunit   ? [s.adunit]   : []);
+      pendingAdunitIds = Array.isArray(s.adunitIds) ? s.adunitIds : (s.adunitId ? [s.adunitId] : []);
+      pendingPlatforms = Array.isArray(s.platforms) ? s.platforms : (s.platform ? [s.platform] : []);
       if (s.sortCol)   { sortCol = s.sortCol; sortDir = s.sortDir || 1; }
       switchPeriod(s.period || 'daily');
       return true;
@@ -266,44 +264,31 @@ function showError(msg) {
 
 // ── 광고단위명 필터 옵션 업데이트 ─────────
 function updateAdunitFilter(rows) {
-  const names   = [...new Set(rows.map(r => r.adunitName).filter(Boolean))].sort();
-  const current = pendingAdunit || adunitFilter.value;
-  pendingAdunit = '';
-  adunitFilter.innerHTML = '<option value="">전체 광고단위명</option>';
-  names.forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    if (name === current) opt.selected = true;
-    adunitFilter.appendChild(opt);
-  });
-  if (ssAdunit) ssAdunit.refresh(); // SearchableSelect UI 동기화
+  const names = [...new Set(rows.map(r => r.adunitName).filter(Boolean))].sort();
+  mcsAdunit.refresh(names);
+  if (pendingAdunits.length) { mcsAdunit.setSelected(pendingAdunits); pendingAdunits = []; }
 }
 
 // ── 광고단위 ID 필터 옵션 업데이트 ─────────
 function updateAdunitIdFilter(rows) {
-  const ids     = [...new Set(rows.map(r => r.adunitId).filter(Boolean))].sort();
-  const current = pendingAdunitId || adunitIdFilter.value;
-  pendingAdunitId = '';
-  adunitIdFilter.innerHTML = '<option value="">전체 광고단위 ID</option>';
-  ids.forEach(id => {
-    const opt = document.createElement('option');
-    opt.value = id; opt.textContent = id;
-    if (id === current) opt.selected = true;
-    adunitIdFilter.appendChild(opt);
-  });
-  if (ssAdunitId) ssAdunitId.refresh(); // SearchableSelect UI 동기화
+  const ids = [...new Set(rows.map(r => r.adunitId).filter(Boolean))].sort();
+  mcsAdunitId.refresh(ids);
+  if (pendingAdunitIds.length) { mcsAdunitId.setSelected(pendingAdunitIds); pendingAdunitIds = []; }
 }
 
 // ── 필터 적용 ────────────────────────────
 function applyFilters(rows) {
   let result = [...rows];
-  const adunit   = adunitFilter.value;
-  const adunitId = adunitIdFilter.value;
-  const platform = platformFilter.value;
-  if (adunit)   result = result.filter(r => r.adunitName === adunit);
-  if (adunitId) result = result.filter(r => r.adunitId   === adunitId);
-  if (platform === 'App 전체') result = result.filter(r => r._platform === 'App iOS' || r._platform === 'App Android');
-  else if (platform) result = result.filter(r => r._platform === platform);
+  const adunits   = mcsAdunit   ? mcsAdunit.getSelected()   : [];
+  const adunitIds = mcsAdunitId ? mcsAdunitId.getSelected() : [];
+  const platforms = mcsPlatform ? mcsPlatform.getSelected() : [];
+  if (adunits.length)   result = result.filter(r => adunits.includes(r.adunitName));
+  if (adunitIds.length) result = result.filter(r => adunitIds.includes(r.adunitId));
+  if (platforms.length) {
+    const expanded = new Set(platforms);
+    if (expanded.has('App 전체')) { expanded.add('App iOS'); expanded.add('App Android'); }
+    result = result.filter(r => expanded.has(r._platform));
+  }
   return result;
 }
 
@@ -645,9 +630,6 @@ function reRender() {
   renderChart(displayRows);
 }
 
-adunitFilter.addEventListener('change',   () => { saveState(); reRender(); });
-adunitIdFilter.addEventListener('change', () => { saveState(); reRender(); });
-platformFilter.addEventListener('change', () => { saveState(); reRender(); });
 searchBtn.addEventListener('click',  () => { saveState(); fetchAndRender(); });
 document.addEventListener('keydown', e => { if (e.key === 'Enter') { saveState(); fetchAndRender(); } });
 
@@ -666,125 +648,119 @@ document.querySelector('#result-table thead').addEventListener('click', e => {
   reRender();
 });
 
-// ── SearchableSelect (검색 가능한 드롭다운) ──
-class SearchableSelect {
-  constructor(selectEl) {
-    this.el = selectEl;
+// ── MultiCheckSelect (체크박스 복수선택 드롭다운) ──
+class MultiCheckSelect {
+  constructor(el, placeholder, onChange) {
+    this.el          = el;
+    this.placeholder = placeholder;
+    this.onChange    = onChange;
+    this.options     = [];
+    this.selected    = new Set();
     this._build();
-    this._bind();
   }
 
   _build() {
-    const wrap = document.createElement('div');
-    wrap.className = 'ss-wrap';
+    this.el.className = 'mcs-wrap';
+    this.el.innerHTML = `
+      <button type="button" class="mcs-trigger">
+        <span class="mcs-label">${this.placeholder}</span>
+        <span class="mcs-arrow">▾</span>
+      </button>
+      <div class="mcs-dropdown">
+        <input class="mcs-search" type="text" placeholder="검색...">
+        <div class="mcs-actions">
+          <button type="button" class="mcs-btn-all">모두 선택</button>
+          <button type="button" class="mcs-btn-none">모두 지우기</button>
+        </div>
+        <div class="mcs-list"></div>
+      </div>`;
+    this._trigger  = this.el.querySelector('.mcs-trigger');
+    this._dropdown = this.el.querySelector('.mcs-dropdown');
+    this._search   = this.el.querySelector('.mcs-search');
+    this._list     = this.el.querySelector('.mcs-list');
+    this._label    = this.el.querySelector('.mcs-label');
+    this._arrow    = this.el.querySelector('.mcs-arrow');
 
-    const display = document.createElement('input');
-    display.type = 'text';
-    display.className = 'ss-display';
-    display.placeholder = this.el.options[0]?.text || '';
-    display.autocomplete = 'off';
-    display.readOnly = true;
-
-    const panel = document.createElement('div');
-    panel.className = 'ss-panel';
-
-    const search = document.createElement('input');
-    search.type = 'text';
-    search.className = 'ss-search';
-    search.placeholder = '검색...';
-
-    const list = document.createElement('div');
-    list.className = 'ss-list';
-
-    panel.append(search, list);
-    this.el.insertAdjacentElement('afterend', wrap);
-    wrap.append(display, panel, this.el);
-
-    this.wrap    = wrap;
-    this.display = display;
-    this.panel   = panel;
-    this.search  = search;
-    this.list    = list;
-
-    this.refresh();
-  }
-
-  _bind() {
-    // 디스플레이 클릭 → 드롭다운 토글
-    this.display.addEventListener('click', () => this._toggle());
-
-    // 검색 입력 → 리스트 필터
-    this.search.addEventListener('input', () => this._renderList(this.search.value));
-
-    // 옵션 선택
-    this.list.addEventListener('mousedown', e => {
-      const item = e.target.closest('.ss-option');
-      if (!item) return;
-      e.preventDefault();
-      this._select(item.dataset.value);
+    this._trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      const isOpen = this._dropdown.classList.contains('mcs-open');
+      document.querySelectorAll('.mcs-dropdown.mcs-open').forEach(d => d.classList.remove('mcs-open'));
+      document.querySelectorAll('.mcs-wrap .mcs-arrow').forEach(a => a.textContent = '▾');
+      if (!isOpen) {
+        this._dropdown.classList.add('mcs-open');
+        this._arrow.textContent = '▴';
+        setTimeout(() => this._search.focus(), 0);
+      }
     });
-
-    // 외부 클릭 시 닫기
+    this.el.querySelector('.mcs-btn-all').addEventListener('click', e => {
+      e.stopPropagation();
+      this.options.forEach(o => this.selected.add(o.value));
+      this._renderItems(); this._updateLabel(); this.onChange();
+    });
+    this.el.querySelector('.mcs-btn-none').addEventListener('click', e => {
+      e.stopPropagation();
+      this.selected.clear();
+      this._renderItems(); this._updateLabel(); this.onChange();
+    });
+    this._search.addEventListener('input', () => this._renderItems());
     document.addEventListener('click', e => {
-      if (!this.wrap.contains(e.target)) this._close();
+      if (!this.el.contains(e.target)) {
+        this._dropdown.classList.remove('mcs-open');
+        this._arrow.textContent = '▾';
+      }
     });
+  }
 
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') this._close();
+  _renderItems() {
+    const q = this._search.value.toLowerCase();
+    const visible = q ? this.options.filter(o => o.label.toLowerCase().includes(q)) : this.options;
+    this._list.innerHTML = visible.map(o => `
+      <label class="mcs-item">
+        <input type="checkbox" value="${o.value}" ${this.selected.has(o.value) ? 'checked' : ''}>
+        <span>${o.label}</span>
+      </label>`).join('');
+    this._list.querySelectorAll('input').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) this.selected.add(cb.value);
+        else this.selected.delete(cb.value);
+        this._updateLabel(); this.onChange();
+      });
     });
   }
 
-  _renderList(filter = '') {
-    const q = filter.toLowerCase();
-    const items = [...this.el.options].filter(o => !q || o.text.toLowerCase().includes(q));
-    this.list.innerHTML = items.map(o =>
-      `<div class="ss-option${o.value === this.el.value ? ' active' : ''}" data-value="${o.value}">${o.text}</div>`
-    ).join('');
+  _updateLabel() {
+    const n = this.selected.size;
+    this._label.textContent = n === 0 ? this.placeholder : `${n}개 선택됨`;
   }
 
-  _open() {
-    this.wrap.classList.add('ss-is-open');
-    this.search.value = '';
-    this._renderList('');
-    setTimeout(() => this.search.focus(), 0);
+  refresh(options = []) {
+    this.options = options.map(o => typeof o === 'string' ? { value: o, label: o } : o);
+    const valid  = new Set(this.options.map(o => o.value));
+    this.selected = new Set([...this.selected].filter(v => valid.has(v)));
+    this._renderItems(); this._updateLabel();
   }
 
-  _close() {
-    this.wrap.classList.remove('ss-is-open');
-    this.search.value = '';
+  setSelected(values) {
+    this.selected = new Set(values.filter(v => this.options.some(o => o.value === v)));
+    this._renderItems(); this._updateLabel();
   }
 
-  _toggle() {
-    this.wrap.classList.contains('ss-is-open') ? this._close() : this._open();
-  }
-
-  _select(val) {
-    this.el.value = val;
-    const opt = [...this.el.options].find(o => o.value === val);
-    this.display.value = (opt && opt.value) ? opt.text : '';
-    this._close();
-    this._renderList('');
-    this.el.dispatchEvent(new Event('change'));
-  }
-
-  // 원본 select 옵션/값 변경 후 UI 갱신 (updateAdunitFilter 등 호출 후 사용)
-  refresh() {
-    this._renderList(this.search?.value || '');
-    const opt = [...this.el.options].find(o => o.value === this.el.value);
-    this.display.value = (opt && opt.value) ? opt.text : '';
-  }
-
-  getValue() { return this.el.value; }
+  getSelected() { return [...this.selected]; }
 }
 
-// ── SearchableSelect 초기화 ───────────────
-function initSearchableSelects() {
-  ssAdunit   = new SearchableSelect(adunitFilter);
-  ssAdunitId = new SearchableSelect(adunitIdFilter);
-  ssPlatform = new SearchableSelect(platformFilter);
-
-  // SearchableSelect가 select를 숨기므로 플랫폼 복원값 반영
-  if (ssPlatform) ssPlatform.refresh();
+// ── MultiCheckSelect 초기화 ──────────────
+function initMultiCheckSelects() {
+  mcsAdunit   = new MultiCheckSelect(document.getElementById('mcs-adunit'),    '전체 광고단위명',  () => { saveState(); reRender(); });
+  mcsAdunitId = new MultiCheckSelect(document.getElementById('mcs-adunit-id'), '전체 광고단위 ID', () => { saveState(); reRender(); });
+  mcsPlatform = new MultiCheckSelect(document.getElementById('mcs-platform'),  '전체 플랫폼',     () => { saveState(); reRender(); });
+  mcsPlatform.refresh([
+    { value: 'PC Web',      label: 'PC Web'      },
+    { value: 'Mobile Web',  label: 'Mobile Web'  },
+    { value: 'App 전체',    label: 'App 전체'    },
+    { value: 'App iOS',     label: 'App iOS'     },
+    { value: 'App Android', label: 'App Android' },
+  ]);
+  if (pendingPlatforms.length) { mcsPlatform.setSelected(pendingPlatforms); pendingPlatforms = []; }
 }
 
 // ── Flatpickr 초기화 (캘린더 안 빠른 선택 버튼) ──
@@ -951,6 +927,6 @@ function initFlatpickr() {
 // ── 초기화 ───────────────────────────────
 initDates();                           // 기본값 먼저 세팅
 const hadSavedState = restoreState();  // 저장된 조건으로 덮어씌우기
-initSearchableSelects();               // SearchableSelect 초기화 (select 상태 반영)
+initMultiCheckSelects();               // MultiCheckSelect 초기화 (select 상태 반영)
 initFlatpickr();                       // Flatpickr 초기화 (복원값을 defaultDate로 사용)
 if (hadSavedState) fetchAndRender();   // 저장 조건 있으면 자동 조회

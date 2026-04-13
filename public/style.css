@@ -179,44 +179,49 @@ header .subtitle strong {
   color: var(--text-sub);
   white-space: nowrap;
 }
-/* 원본 select는 SearchableSelect가 숨김 처리 */
-.filter-area select { display: none; }
-
 /* =========================================
-   SearchableSelect (검색 가능한 드롭다운)
+   MultiCheckSelect (체크박스 복수선택 드롭다운)
    ========================================= */
-.ss-wrap {
+.mcs-wrap {
   position: relative;
   width: 100%;
 }
-.ss-display {
+.mcs-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
-  padding: 8px 30px 8px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
   color: var(--text);
   background: var(--bg);
-  outline: none;
   cursor: pointer;
   transition: border-color 0.18s;
+  text-align: left;
+  gap: 6px;
+}
+.mcs-trigger:hover { border-color: var(--primary); }
+.mcs-label {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
 }
-.ss-display:focus,
-.ss-wrap.ss-is-open .ss-display { border-color: var(--primary); }
-.ss-panel {
+.mcs-arrow {
+  font-size: 11px;
+  color: var(--text-sub);
+  flex-shrink: 0;
+}
+.mcs-dropdown {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   width: 100%;
-  min-width: 180px;
+  min-width: 200px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -224,8 +229,8 @@ header .subtitle strong {
   z-index: 2000;
   overflow: hidden;
 }
-.ss-wrap.ss-is-open .ss-panel { display: block; }
-.ss-search {
+.mcs-dropdown.mcs-open { display: block; }
+.mcs-search {
   width: 100%;
   padding: 8px 12px;
   border: none;
@@ -235,20 +240,46 @@ header .subtitle strong {
   outline: none;
   background: var(--surface);
   color: var(--text);
+  box-sizing: border-box;
 }
-.ss-list {
-  max-height: 200px;
+.mcs-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.mcs-btn-all,
+.mcs-btn-none {
+  flex: 1;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--text-sub);
+  transition: background 0.15s, color 0.15s;
+}
+.mcs-btn-all:hover  { background: var(--primary); color: #fff; border-color: var(--primary); }
+.mcs-btn-none:hover { background: #f3f4f6; color: var(--text); }
+.mcs-list {
+  max-height: 220px;
   overflow-y: auto;
 }
-.ss-option {
-  padding: 8px 12px;
-  font-size: 14px;
+.mcs-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
   cursor: pointer;
-  transition: background 0.1s;
+  font-size: 14px;
   color: var(--text);
+  transition: background 0.1s;
+  user-select: none;
 }
-.ss-option:hover { background: #EEF4FF; color: var(--primary); }
-.ss-option.active { background: #EEF4FF; color: var(--primary); font-weight: 600; }
+.mcs-item:hover { background: #EEF4FF; }
+.mcs-item input[type="checkbox"] { accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 
 .search-btn {
   padding: 10px 28px;

@@ -1,7 +1,7 @@
 /* =========================================
    카페 네이버 수익 대시보드 - naver.js
    (app.js 이후 로드: won, comma, rpmFmt, COPY_SVG, getWeekRange, monthRange,
-    daysAgo, monthsAgo, today, SearchableSelect 공유)
+    daysAgo, monthsAgo, today, MultiCheckSelect 공유)
    ========================================= */
 
 // ── 캐시 키 ──────────────────────────────────
@@ -13,7 +13,7 @@ let naverChartInstance = null;
 let naverSortCol       = null;
 let naverSortDir       = 1;
 let naverCurrentPeriod = 'daily';
-let naverSsAdId        = null;
+let naverMcsAdId       = null;
 let naverFpStartD = null, naverFpEndD = null;
 let naverFpStartW = null, naverFpEndW = null;
 let naverFpStartM = null, naverFpEndM = null;
@@ -29,7 +29,6 @@ const naverFileNameEl      = document.getElementById('naver-file-name');
 const naverFileResetBtn    = document.getElementById('naver-file-reset');
 const naverPeriodTabsEl    = document.getElementById('naver-period-tabs');
 const naverControls        = document.getElementById('naver-controls');
-const naverAdIdFilter      = document.getElementById('naver-adid-filter');
 const naverStartDateD      = document.getElementById('naver-start-d');
 const naverEndDateD        = document.getElementById('naver-end-d');
 const naverStartDateW      = document.getElementById('naver-start-w');
@@ -226,21 +225,14 @@ function naverGroupByMonth(rows) {
 
 // ── 필터 옵션 업데이트 ─────────────────────
 function updateNaverFilters(rows) {
-  const adIds   = [...new Set(rows.map(r => r.adId).filter(Boolean))].sort();
-  const curAdId = naverAdIdFilter.value;
-  naverAdIdFilter.innerHTML = '<option value="">전체 광고ID</option>';
-  adIds.forEach(v => {
-    const o = document.createElement('option');
-    o.value = v; o.textContent = v;
-    if (v === curAdId) o.selected = true;
-    naverAdIdFilter.appendChild(o);
-  });
-  if (naverSsAdId) naverSsAdId.refresh();
+  const adIds = [...new Set(rows.map(r => r.adId).filter(Boolean))].sort();
+  if (naverMcsAdId) naverMcsAdId.refresh(adIds);
 }
 
 function applyNaverFilters(rows) {
-  const adId = naverAdIdFilter.value;
-  return rows.filter(r => !adId || r.adId === adId);
+  const adIds = naverMcsAdId ? naverMcsAdId.getSelected() : [];
+  if (!adIds.length) return rows;
+  return rows.filter(r => adIds.includes(r.adId));
 }
 
 // ── 복사 버튼 ────────────────────────────
@@ -684,12 +676,10 @@ function handleNaverFile(file) {
     naverFileInfo.classList.remove('hidden');
     naverPeriodTabsEl.style.display = '';
     naverControls.style.display     = '';
-    updateNaverFilters(rows);
-    if (!naverSsAdId) {
-      naverSsAdId = new SearchableSelect(naverAdIdFilter);
-    } else {
-      naverSsAdId.refresh();
+    if (!naverMcsAdId) {
+      naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
     }
+    updateNaverFilters(rows);
     setNaverDatesFromData();
     naverReRender();
   };
@@ -726,14 +716,10 @@ naverFileResetBtn.addEventListener('click', () => {
   naverTableSection.style.display    = 'none';
   naverResultBody.innerHTML    = '';
   naverPlatformCards.innerHTML = '';
-  naverAdIdFilter.innerHTML    = '<option value="">전체 광고ID</option>';
-  if (naverSsAdId) naverSsAdId.refresh();
+  if (naverMcsAdId) naverMcsAdId.refresh([]);
   localStorage.removeItem(NAVER_CACHE_KEY); // 캐시 삭제
   switchNaverPeriod('daily');
 });
-
-// ── 필터 변경 ─────────────────────────────
-naverAdIdFilter.addEventListener('change', naverReRender);
 
 // ── 테이블 정렬 ───────────────────────────
 document.querySelector('#naver-result-table thead').addEventListener('click', e => {
@@ -762,12 +748,10 @@ function loadNaverFromCache() {
     naverFileInfo.classList.remove('hidden');
     naverPeriodTabsEl.style.display = '';
     naverControls.style.display     = '';
-    updateNaverFilters(rows);
-    if (!naverSsAdId) {
-      naverSsAdId = new SearchableSelect(naverAdIdFilter);
-    } else {
-      naverSsAdId.refresh();
+    if (!naverMcsAdId) {
+      naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
     }
+    updateNaverFilters(rows);
     setNaverDatesFromData();
     naverReRender();
   } catch (_) {
