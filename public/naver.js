@@ -906,6 +906,9 @@ document.querySelector('#naver-result-table thead').addEventListener('click', e 
   naverReRender();
 });
 
+// ── 조회 버튼 ─────────────────────────────
+document.getElementById('naver-search-btn').addEventListener('click', naverReRender);
+
 // ── CSV 다운로드 버튼 ─────────────────────
 naverCsvDlBtn.addEventListener('click', downloadNaverCSV);
 
