@@ -493,6 +493,7 @@ function initNaverFlatpickr() {
         naverFpEndD.setDate(selectedDates[0], false);
       }
       naverReRender();
+      setTimeout(() => naverFpEndD.open(), 50);
     },
     onReady(_, __, fp) {
       addShortcuts(fp.calendarContainer, fp, [

@@ -66,20 +66,32 @@
           <button id="search-btn" class="search-btn">조회</button>
         </div>
       <!-- 비교 필터 행 -->
-      <div class="filter-row compare-filter-row" id="compare-filter-row">
-        <div class="filter-area">
-          <label>광고단위명 비교</label>
-          <div id="mcs-cmp-adunit"></div>
+      <div class="compare-filter-row" id="compare-filter-row">
+        <!-- 비교 기간 -->
+        <div class="filter-row compare-date-row">
+          <div class="date-range">
+            <label>비교 시작일 <input type="text" id="cmp-start-date" placeholder="날짜 선택" readonly /></label>
+            <span class="dash">~</span>
+            <label>비교 종료일 <input type="text" id="cmp-end-date" placeholder="날짜 선택" readonly /></label>
+          </div>
+          <button type="button" id="cmp-date-clear" class="cmp-clear-btn">비교 기간 초기화</button>
         </div>
-        <div class="filter-area">
-          <label>광고단위 ID 비교</label>
-          <div id="mcs-cmp-adunit-id"></div>
+        <!-- 비교 필터 드롭다운 -->
+        <div class="filter-row">
+          <div class="filter-area">
+            <label>광고단위명 비교</label>
+            <div id="mcs-cmp-adunit"></div>
+          </div>
+          <div class="filter-area">
+            <label>광고단위 ID 비교</label>
+            <div id="mcs-cmp-adunit-id"></div>
+          </div>
+          <div class="filter-area">
+            <label>플랫폼 비교</label>
+            <div id="mcs-cmp-platform"></div>
+          </div>
+          <div class="filter-placeholder"></div>
         </div>
-        <div class="filter-area">
-          <label>플랫폼 비교</label>
-          <div id="mcs-cmp-platform"></div>
-        </div>
-        <div class="filter-placeholder"></div>
       </div>
       </div>
 

@@ -187,6 +187,24 @@ header .subtitle strong {
 .filter-placeholder {
   flex: 0 0 120px; /* matches search button width */
 }
+.compare-date-row {
+  margin-bottom: 10px;
+  align-items: center;
+}
+.cmp-clear-btn {
+  padding: 8px 14px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-sub);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.cmp-clear-btn:hover { background: #f3f4f6; color: var(--text); }
 /* =========================================
    MultiCheckSelect (체크박스 복수선택 드롭다운)
    ========================================= */
@@ -401,6 +419,12 @@ header .subtitle strong {
   padding-top: 4px;
   border-top: 1px solid var(--border);
 }
+
+/* 총수익 카드(파란 배경)에서 기본/비교값 가시성 보정 */
+.card.total .card-value { color: #fff; }
+.card.total .cv-primary { color: #fff; }
+.card.total .cv-compare { color: #FFCDD2; }
+.card.total .cv-primary + .cv-compare { border-top-color: rgba(255,255,255,0.25); }
 
 /* =========================================
    플랫폼별 수익

@@ -24,6 +24,9 @@ let mcsPlatform = null;       // MultiCheckSelect 인스턴스 (플랫폼)
 let mcsCmpAdunit   = null;  // 비교 MultiCheckSelect (광고단위명)
 let mcsCmpAdunitId = null;  // 비교 MultiCheckSelect (광고단위 ID)
 let mcsCmpPlatform = null;  // 비교 MultiCheckSelect (플랫폼)
+let allRowsB   = [];   // 비교 기간 데이터
+let cmpFpStart = null; // 비교 기간 Flatpickr 시작
+let cmpFpEnd   = null; // 비교 기간 Flatpickr 종료
 
 // ── 키워드 필터 ───────────────────────────
 const KEYWORDS = ['카페', '테이블'];
@@ -131,6 +134,9 @@ const tableSection   = document.getElementById('table-section');
 const resultBody     = document.getElementById('result-body');
 const rowCountEl     = document.getElementById('row-count');
 const csvBtn         = document.getElementById('csv-btn');
+const cmpStartDateEl = document.getElementById('cmp-start-date');
+const cmpEndDateEl   = document.getElementById('cmp-end-date');
+const cmpDateClearBtn = document.getElementById('cmp-date-clear');
 const chartSection   = document.getElementById('chart-section');
 const totalProfit    = document.getElementById('total-profit');
 const totalImpression = document.getElementById('total-impression');
@@ -270,7 +276,10 @@ function updateAdunitFilter(rows) {
   const names = [...new Set(rows.map(r => r.adunitName).filter(Boolean))].sort();
   mcsAdunit.refresh(names);
   if (pendingAdunits.length) { mcsAdunit.setSelected(pendingAdunits); pendingAdunits = []; }
-  if (mcsCmpAdunit) mcsCmpAdunit.refresh(names);
+  if (mcsCmpAdunit) {
+    const cmpNames = [...new Set([...rows, ...allRowsB].map(r => r.adunitName).filter(Boolean))].sort();
+    mcsCmpAdunit.refresh(cmpNames);
+  }
 }
 
 // ── 광고단위 ID 필터 옵션 업데이트 ─────────
@@ -278,7 +287,10 @@ function updateAdunitIdFilter(rows) {
   const ids = [...new Set(rows.map(r => r.adunitId).filter(Boolean))].sort();
   mcsAdunitId.refresh(ids);
   if (pendingAdunitIds.length) { mcsAdunitId.setSelected(pendingAdunitIds); pendingAdunitIds = []; }
-  if (mcsCmpAdunitId) mcsCmpAdunitId.refresh(ids);
+  if (mcsCmpAdunitId) {
+    const cmpIds = [...new Set([...rows, ...allRowsB].map(r => r.adunitId).filter(Boolean))].sort();
+    mcsCmpAdunitId.refresh(cmpIds);
+  }
 }
 
 // ── 필터 적용 ────────────────────────────
@@ -297,12 +309,20 @@ function applyFiltersA(rows) {
   return result;
 }
 
-function applyFiltersB(rows) {
+function applyFiltersB() {
+  const hasCmpDates = !!(cmpStartDateEl.value && cmpEndDateEl.value);
   const adunits   = mcsCmpAdunit   ? mcsCmpAdunit.getSelected()   : [];
   const adunitIds = mcsCmpAdunitId ? mcsCmpAdunitId.getSelected() : [];
   const platforms = mcsCmpPlatform ? mcsCmpPlatform.getSelected() : [];
-  if (!adunits.length && !adunitIds.length && !platforms.length) return [];
-  let result = [...rows];
+
+  // 비교 기간이 없고 필터 선택도 없으면 비교 없음
+  if (!hasCmpDates && !adunits.length && !adunitIds.length && !platforms.length) return [];
+
+  // 비교 기간이 설정된 경우 allRowsB 사용, 아니면 allRows 공유
+  const source = hasCmpDates ? allRowsB : allRows;
+  if (!source.length) return [];
+
+  let result = [...source];
   if (adunits.length)   result = result.filter(r => adunits.includes(r.adunitName));
   if (adunitIds.length) result = result.filter(r => adunitIds.includes(r.adunitId));
   if (platforms.length) {
@@ -659,6 +679,27 @@ async function fetchAndRender() {
     rows.forEach(r => { r._platform = guessPlatform(r); });
     allRows = rows;
 
+    // 비교 기간 데이터 별도 fetch
+    if (cmpStartDateEl.value && cmpEndDateEl.value) {
+      try {
+        const cmpParams = { periodType: 'D', startDate: toYYYYMMDD(cmpStartDateEl.value), endDate: toYYYYMMDD(cmpEndDateEl.value) };
+        const cmpQs = new URLSearchParams(cmpParams).toString();
+        const cmpCacheKey = 'cmp:' + cmpQs;
+        let cmpJson;
+        if (apiCache.has(cmpCacheKey)) {
+          cmpJson = apiCache.get(cmpCacheKey);
+        } else {
+          const cmpRes = await fetch(`/api/report?${cmpQs}`);
+          cmpJson = await cmpRes.json();
+          if (cmpRes.ok) apiCache.set(cmpCacheKey, cmpJson);
+        }
+        allRowsB = (cmpJson.rows || []).filter(r => isCafeUnit(r.adunitName));
+        allRowsB.forEach(r => { r._platform = guessPlatform(r); });
+      } catch (_) { allRowsB = []; }
+    } else {
+      allRowsB = [];
+    }
+
     loadingEl.classList.add('hidden');
 
     if (rows.length === 0) {
@@ -669,7 +710,7 @@ async function fetchAndRender() {
     updateAdunitFilter(rows);
     updateAdunitIdFilter(rows);
     let rowsA = applyFiltersA(rows);
-    let rowsB = applyFiltersB(rows);
+    let rowsB = applyFiltersB();
     if (currentPeriod === 'weekly') {
       rowsA = groupByWeek(rowsA);
       rowsB = rowsB.length ? groupByWeek(rowsB) : [];
@@ -694,7 +735,7 @@ async function fetchAndRender() {
 function reRender() {
   if (allRows.length === 0) return;
   let rowsA = applyFiltersA(allRows);
-  let rowsB = applyFiltersB(allRows);
+  let rowsB = applyFiltersB();
   if (currentPeriod === 'weekly') {
     rowsA = groupByWeek(rowsA);
     rowsB = rowsB.length ? groupByWeek(rowsB) : [];
@@ -922,6 +963,7 @@ function initFlatpickr() {
         fpEnd.setDate(selectedDates[0], false);
       }
       saveState();
+      setTimeout(() => fpEnd.open(), 50);
     },
     onReady(_, __, fp) {
       addShortcuts(fp.calendarContainer, fp, [
@@ -1029,9 +1071,43 @@ function initFlatpickr() {
   });
 }
 
+// ── 비교 기간 Flatpickr 초기화 ──────────────
+function initCmpFlatpickr() {
+  const baseOpts = { locale: 'ko', dateFormat: 'Y-m-d', disableMobile: true };
+
+  cmpFpStart = flatpickr(cmpStartDateEl, {
+    ...baseOpts,
+    placeholder: '비교 시작일',
+    onChange(selectedDates) {
+      if (selectedDates[0] && cmpFpEnd.selectedDates[0] && selectedDates[0] > cmpFpEnd.selectedDates[0]) {
+        cmpFpEnd.setDate(selectedDates[0], false);
+      }
+      setTimeout(() => cmpFpEnd.open(), 50);
+    }
+  });
+
+  cmpFpEnd = flatpickr(cmpEndDateEl, {
+    ...baseOpts,
+    placeholder: '비교 종료일',
+    onChange(selectedDates) {
+      if (selectedDates[0] && cmpFpStart.selectedDates[0] && selectedDates[0] < cmpFpStart.selectedDates[0]) {
+        cmpFpStart.setDate(selectedDates[0], false);
+      }
+    }
+  });
+
+  cmpDateClearBtn.addEventListener('click', () => {
+    cmpFpStart.clear();
+    cmpFpEnd.clear();
+    allRowsB = [];
+    reRender();
+  });
+}
+
 // ── 초기화 ───────────────────────────────
 initDates();                           // 기본값 먼저 세팅
 const hadSavedState = restoreState();  // 저장된 조건으로 덮어씌우기
-initMultiCheckSelects();               // MultiCheckSelect 초기화 (select 상태 반영)
-initFlatpickr();                       // Flatpickr 초기화 (복원값을 defaultDate로 사용)
+initMultiCheckSelects();
+initFlatpickr();
+initCmpFlatpickr();
 if (hadSavedState) fetchAndRender();   // 저장 조건 있으면 자동 조회
