@@ -19,8 +19,9 @@ module.exports = async (req, res) => {
     const result = await runReport({
       networkCode: GOOGLE_NETWORK_CODE,
       dimensions: ['DATE', 'AD_UNIT_NAME'],
-      // TOTAL_LINE_ITEM_LEVEL_* 만 (Ad Server + Ad Exchange 합산)
+      // TOTAL_LINE_ITEM_LEVEL_* 만 (Ad Server + Ad Exchange 합산) + AD_REQUESTS (요청수)
       columns: [
+        'TOTAL_AD_REQUESTS',
         'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
         'TOTAL_LINE_ITEM_LEVEL_CLICKS',
         'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',

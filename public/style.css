@@ -928,6 +928,51 @@ tbody td:nth-child(3) { text-align: left; }
   font-weight: 500;
 }
 
+/* 플랫폼 카드 내부 세부 지표 (요청/노출/eCPM) */
+.cmp-card-metrics {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+.cmp-card-metrics .cmp-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.3;
+  min-width: 0;
+}
+.cmp-card-metrics .cmp-metric .lbl {
+  color: #6B7280;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.cmp-card-metrics .cmp-metric .val {
+  color: #111827;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-metrics {
+  border-top-color: rgba(255, 255, 255, 0.25);
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-metrics .lbl {
+  color: rgba(255, 255, 255, 0.75);
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-metrics .val {
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .cmp-card-metrics { grid-template-columns: 1fr; }
+}
+
 /* 차트 2열 그리드 */
 .cmp-charts-grid {
   display: grid;

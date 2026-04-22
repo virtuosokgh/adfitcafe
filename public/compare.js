@@ -21,7 +21,8 @@
   let cmpPieChart   = null;
 
   // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
-  const PERSIST_CACHE_KEY = 'cmp_fetch_cache_v1';
+  // v2: request 필드 추가됨 → v1 캐시는 자동 무시
+  const PERSIST_CACHE_KEY = 'cmp_fetch_cache_v2';
   const CACHE_MAX_ENTRIES = 5;   // 기간별 최대 5개 유지 (오래된 것 퇴출)
   const clientCache = new Map(); // key(start-end) → { kRows, gRows, at }
   loadPersistCache();
@@ -329,6 +330,7 @@
         unit: r.adunitId || r.adunitName,   // Unit ID 사용
         name: r.adunitName,                  // 원본 유닛명 (표시용)
         date: dateIso,
+        request: Number(r.request || 0),
         impression: Number(r.impression || 0),
         click: Number(r.click || 0),
         profit: Number(r.profit || 0),
@@ -355,6 +357,7 @@
     const headers = j.headers || [];
     const cDate = headers.find(h => /DATE/i.test(h));
     const cName = headers.find(h => /AD_UNIT_NAME/i.test(h));
+    const cReq  = headers.find(h => /TOTAL_AD_REQUESTS/i.test(h)) || headers.find(h => /AD_REQUESTS/i.test(h));
     const cImp  = headers.find(h => /TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS/i.test(h)) || headers.find(h => /IMPRESSIONS/i.test(h));
     const cClk  = headers.find(h => /TOTAL_LINE_ITEM_LEVEL_CLICKS/i.test(h)) || headers.find(h => /CLICKS/i.test(h));
     const cRev  = headers.find(h => /TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE/i.test(h)) || headers.find(h => /REVENUE/i.test(h));
@@ -371,6 +374,7 @@
         platform: 'google',
         unit,
         date: r[cDate] || '',
+        request: cReq ? Number(r[cReq] || 0) : 0,
         impression: Number(r[cImp] || 0),
         click: Number(r[cClk] || 0),
         profit,
@@ -597,26 +601,64 @@
     renderTable(rows);
   }
 
-  function sumBy(rows, platform) {
-    return rows.filter(r => r.platform === platform).reduce((a, r) => a + r.profit, 0);
+  // 플랫폼별 합계 계산 (profit / request / impression / click)
+  function aggBy(rows, platform) {
+    let profit = 0, request = 0, impression = 0, click = 0;
+    for (const r of rows) {
+      if (platform && r.platform !== platform) continue;
+      profit     += Number(r.profit || 0);
+      request    += Number(r.request || 0);
+      impression += Number(r.impression || 0);
+      click      += Number(r.click || 0);
+    }
+    return { profit, request, impression, click };
+  }
+
+  // eCPM 계산 (없으면 '-' 반환)
+  function ecpm(profit, base) {
+    if (!base || base <= 0) return '-';
+    return krw(Math.round(profit / base * 1000));
   }
 
   function renderSummary(rows) {
-    const k = sumBy(rows, 'kakao');
-    const g = sumBy(rows, 'google');
-    const n = sumBy(rows, 'naver');
-    const total = k + g + n;
+    const aK = aggBy(rows, 'kakao');
+    const aG = aggBy(rows, 'google');
+    const aN = aggBy(rows, 'naver');
+    const aT = {
+      profit:     aK.profit + aG.profit + aN.profit,
+      request:    aK.request + aG.request + aN.request,
+      impression: aK.impression + aG.impression + aN.impression,
+      click:      aK.click + aG.click + aN.click,
+    };
+    const total = aT.profit;
     const share = v => total > 0 ? pct(v / total * 100) : '-';
 
-    document.getElementById('cmp-kakao-profit').textContent  = krw(k);
-    document.getElementById('cmp-google-profit').textContent = krw(g);
-    document.getElementById('cmp-naver-profit').textContent  = krw(n);
-    document.getElementById('cmp-total-profit').textContent  = krw(total);
-    document.getElementById('cmp-kakao-share').textContent   = `점유율 ${share(k)}`;
-    document.getElementById('cmp-google-share').textContent  = `점유율 ${share(g)}`;
-    document.getElementById('cmp-naver-share').textContent   = `점유율 ${share(n)}`;
+    const setText = (id, val) => {
+      const el = document.getElementById(id); if (el) el.textContent = val;
+    };
+
+    // 수익 + 점유율
+    setText('cmp-kakao-profit',  krw(aK.profit));
+    setText('cmp-google-profit', krw(aG.profit));
+    setText('cmp-naver-profit',  krw(aN.profit));
+    setText('cmp-total-profit',  krw(aT.profit));
+    setText('cmp-kakao-share',   `점유율 ${share(aK.profit)}`);
+    setText('cmp-google-share',  `점유율 ${share(aG.profit)}`);
+    setText('cmp-naver-share',   `점유율 ${share(aN.profit)}`);
     const uniqUnits = new Set(rows.map(r => `${r.platform}:${r.unit}`)).size;
-    document.getElementById('cmp-total-sub').textContent     = `${uniqUnits}개 유닛`;
+    setText('cmp-total-sub',     `${uniqUnits}개 유닛`);
+
+    // 요청 / 노출 / eCPM
+    const fill = (prefix, a) => {
+      setText(`cmp-${prefix}-req`,      a.request    ? num(a.request)    : '-');
+      setText(`cmp-${prefix}-imp`,      a.impression ? num(a.impression) : '-');
+      setText(`cmp-${prefix}-req-ecpm`, ecpm(a.profit, a.request));
+      setText(`cmp-${prefix}-imp-ecpm`, ecpm(a.profit, a.impression));
+    };
+    fill('kakao',  aK);
+    fill('google', aG);
+    fill('naver',  aN);
+    fill('total',  aT);
   }
 
   function renderTrendChart(rows) {
