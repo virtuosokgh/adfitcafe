@@ -932,7 +932,7 @@ tbody td:nth-child(3) { text-align: left; }
 .cmp-platform-cards .cmp-card-google::before   { background: #1A73E8; }
 .cmp-platform-cards .cmp-card-naver::before    { background: #03C75A; }  /* 이전 호환 */
 .cmp-platform-cards .cmp-card-naver-sa::before { background: #03C75A; }
-.cmp-platform-cards .cmp-card-naver-da::before { background: #16A34A; }
+.cmp-platform-cards .cmp-card-naver-da::before { background: #A855F7; }
 .cmp-platform-cards .cmp-card-total::before    { background: linear-gradient(180deg, #FBB034, #1A73E8, #03C75A, #16A34A); width: 6px; }
 
 /* 일평균 토글 버튼 (카드 우측 상단) */
@@ -1124,7 +1124,7 @@ tbody td:nth-child(3) { text-align: left; }
 .cmp-badge-google   { background: #E0ECFB; color: #0B4F9E; }
 .cmp-badge-naver    { background: #D5F4E3; color: #016B30; }
 .cmp-badge-naver-sa { background: #D5F4E3; color: #016B30; }
-.cmp-badge-naver-da { background: #DCFCE7; color: #14532D; }
+.cmp-badge-naver-da { background: #F3E8FF; color: #6B21A8; }
 
 /* 유닛별 상세 — 플랫폼 그룹 시작 행에 상단 구분선 (첫 행 제외) */
 #cmp-table-body tr.cmp-group-start:not(:first-child) > td {
@@ -1132,12 +1132,57 @@ tbody td:nth-child(3) { text-align: left; }
 }
 
 /* 테이블 행 좌측 컬러 바 */
-#cmp-table tbody tr.cmp-row-kakao  { border-left: 3px solid #FBB034; }
-#cmp-table tbody tr.cmp-row-google { border-left: 3px solid #1A73E8; }
-#cmp-table tbody tr.cmp-row-naver  { border-left: 3px solid #03C75A; }
+#cmp-table tbody tr.cmp-row-kakao    { border-left: 3px solid #FBB034; }
+#cmp-table tbody tr.cmp-row-google   { border-left: 3px solid #1A73E8; }
+#cmp-table tbody tr.cmp-row-naverSA  { border-left: 3px solid #03C75A; }
+#cmp-table tbody tr.cmp-row-naverDA  { border-left: 3px solid #A855F7; }
 
 #cmp-table {
   min-width: 900px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* 컬럼 너비 — 유닛명에 최대한 할당, 숫자 컬럼은 컴팩트 */
+#cmp-table col.cmp-col-platform   { width: 110px; }
+#cmp-table col.cmp-col-unit       { width: auto; }   /* 남는 공간 모두 차지 */
+#cmp-table col.cmp-col-profit     { width: 120px; }
+#cmp-table col.cmp-col-impression { width: 92px; }
+#cmp-table col.cmp-col-click      { width: 78px; }
+#cmp-table col.cmp-col-ctr        { width: 70px; }
+#cmp-table col.cmp-col-ecpm       { width: 92px; }
+#cmp-table col.cmp-col-share      { width: 76px; }
+
+/* 유닛명: 긴 문자열도 잘림없이 (공백 없으면 중간에 끊어서 줄바꿈) */
+#cmp-table td.cmp-cell-unit {
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  overflow: visible;
+  line-height: 1.35;
+  padding-right: 8px;
+}
+
+/* 숫자 셀은 우측 정렬 + nowrap */
+#cmp-table td.cmp-cell-profit,
+#cmp-table td.cmp-cell-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 수익 컬럼은 약간 강조 */
+#cmp-table td.cmp-cell-profit { color: #111827; }
+
+/* thead도 같은 정렬 — 숫자 컬럼 우측 정렬 */
+#cmp-table thead th[data-col="profit"],
+#cmp-table thead th[data-col="impression"],
+#cmp-table thead th[data-col="click"],
+#cmp-table thead th[data-col="ctr"],
+#cmp-table thead th[data-col="ecpm"],
+#cmp-table thead th[data-col="share"] {
+  text-align: right;
 }
 
 /* 통합 비교 - 네이버 컴팩트 업로드 바 */

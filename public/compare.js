@@ -28,8 +28,8 @@
   const PLATFORMS = [
     { key: 'kakao',   label: '🟡 다음(카카오)', color: '#FBB034' },
     { key: 'google',  label: '🔵 구글',         color: '#1A73E8' },
-    { key: 'naverSA', label: '🟢 네이버 SA',    color: '#03C75A' },
-    { key: 'naverDA', label: '🟩 네이버 DA',    color: '#16A34A' },
+    { key: 'naverSA', label: '🟢 네이버 SA',    color: '#03C75A' },   // 네이버 시그니처 그린
+    { key: 'naverDA', label: '🟪 네이버 DA',    color: '#A855F7' },   // 퍼플 — SA 와 명확히 구분
   ];
 
   // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
@@ -127,10 +127,20 @@
     const fileInput = document.getElementById('cmp-naver-csv');
     document.getElementById('cmp-naver-upload-btn').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleNaverUpload);
-    document.getElementById('cmp-naver-reset-btn').addEventListener('click', () => {
+    document.getElementById('cmp-naver-reset-btn').addEventListener('click', async () => {
+      const confirmMsg =
+        '⚠️ 서버에 업로드된 공유 CSV를 삭제합니다.\n' +
+        '모든 사용자에게 영향을 줍니다. 계속할까요?';
+      if (!confirm(confirmMsg)) return;
+      try { if (window.naverShared) await window.naverShared.remove(); } catch {}
       window.naverAllRows = [];
       try { localStorage.removeItem(CMP_NAVER_CACHE_KEY); } catch {}
       syncNaverStatus();
+      if (cmpRawRows.length) renderAll();
+      // 네이버 탭도 클리어 (해당 탭이 있을 때만)
+      if (typeof window.naverReloadFromShared === 'function') {
+        try { window.naverReloadFromShared(); } catch {}
+      }
     });
 
     // 조회 버튼 — 항상 최신 데이터 재조회 (캐시 무시)
@@ -184,13 +194,13 @@
       });
     }
 
-    // 네이버 캐시에서 복원
-    loadNaverFromCache();
-    syncNaverStatus();
-
-    // 탭 첫 진입 시 자동 조회 (기본 기간) → MCS 미리 채우기
-    //   flatpickr 가 defaultDate 를 input 에 반영할 시간을 줌
-    setTimeout(() => fetchAndRender(), 50);
+    // 네이버 CSV 복원 (서버 → 로컬 fallback, async)
+    //   서버 로드가 끝나면 자동 조회 → MCS 채우기 (네이버 포함된 결과)
+    (async () => {
+      await loadNaverFromCache();
+      // flatpickr 가 defaultDate 를 input 에 반영할 시간을 줌
+      setTimeout(() => fetchAndRender(), 50);
+    })();
   }
 
   // 카드 숫자만 추출해 클립보드에 복사 + 짧은 피드백
@@ -233,21 +243,45 @@
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
       try {
         const csv = ev.target.result;
         const rows = parseNaverCsv(csv);
         if (!rows.length) throw new Error('카페 매체 행이 없습니다.');
+
+        // 업로드 상태 표시
+        const statusEl = document.getElementById('cmp-naver-status');
+        if (statusEl) statusEl.textContent = `📤 ${file.name} 공유 업로드 중...`;
+
+        // 서버에 공유 업로드
+        let uploadedAt = Date.now();
+        try {
+          if (window.naverShared) {
+            const meta = await window.naverShared.upload(file, csv);
+            if (meta?.uploadedAt) uploadedAt = meta.uploadedAt;
+          }
+        } catch (err) {
+          alert('⚠️ 서버 공유 업로드 실패: ' + err.message + '\n(내 브라우저에는 저장되었지만 다른 사용자와 공유되지 않을 수 있음)');
+        }
+
         window.naverAllRows = rows;
         try {
-          // csv 원본도 함께 저장 → 차후 필터 규칙 변경 시 재파싱 가능
           localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
-            fileName: file.name, uploadedAt: Date.now(), rows, csv
+            fileName: file.name, uploadedAt, rows, csv
           }));
         } catch {}
-        syncNaverStatus(file.name);
+        syncNaverStatus(file.name, uploadedAt, 'server');
+
+        // 이미 조회 결과가 있으면 리렌더
+        if (cmpRawRows.length) renderAll();
+
+        // 네이버 탭도 최신본으로 갱신
+        if (typeof window.naverReloadFromShared === 'function') {
+          try { window.naverReloadFromShared(); } catch {}
+        }
       } catch (err) {
         alert('CSV 파싱 실패: ' + err.message);
+        syncNaverStatus();
       }
     };
     reader.readAsText(file, 'utf-8');
@@ -255,7 +289,28 @@
     e.target.value = '';
   }
 
-  function loadNaverFromCache() {
+  // 서버 Vercel Blob 에서 최신 CSV 가져오기 (모든 유저 공유)
+  async function loadFromServer() {
+    if (!window.naverShared) return false;
+    const data = await window.naverShared.fetchLatest();
+    if (!data || !data.csv) return false;
+    const fresh = parseNaverCsv(data.csv);
+    if (!fresh.length) return false;
+    window.naverAllRows = fresh;
+    // 로컬에도 싱크 (오프라인 fallback)
+    try {
+      localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
+        fileName: data.fileName,
+        uploadedAt: data.uploadedAt,
+        rows: fresh,
+        csv: data.csv,
+      }));
+    } catch {}
+    syncNaverStatus(data.fileName, data.uploadedAt, 'server');
+    return true;
+  }
+
+  function loadFromLocalCache() {
     try {
       // 구버전 키에서 신버전 키로 1회 마이그레이션 (기존 업로드 유지)
       const LEGACY_KEY = 'naver_csv_cache_v1';
@@ -267,36 +322,58 @@
         }
       }
       const raw = localStorage.getItem(CMP_NAVER_CACHE_KEY);
-      if (!raw) return;
+      if (!raw) return false;
       const parsed = JSON.parse(raw);
-      // 원본 CSV가 있으면 재파싱 (필터 규칙 변경 대응 — 예: 영문 cafe)
       if (parsed && typeof parsed.csv === 'string' && parsed.csv.length) {
         const fresh = parseNaverCsv(parsed.csv);
         if (fresh.length) {
           window.naverAllRows = fresh;
-          // 재파싱 결과를 캐시에 다시 써서 다음에 빠르게 복원
           try {
-            localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
-              ...parsed, rows: fresh
-            }));
+            localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({ ...parsed, rows: fresh }));
           } catch {}
-          return;
+          syncNaverStatus(parsed.fileName, parsed.uploadedAt, 'local');
+          return true;
         }
       }
-      // 구형 캐시 (원본 CSV 없음) → 저장된 rows 사용
       const { rows } = parsed;
-      if (Array.isArray(rows) && rows.length) window.naverAllRows = rows;
+      if (Array.isArray(rows) && rows.length) {
+        window.naverAllRows = rows;
+        syncNaverStatus(parsed.fileName, parsed.uploadedAt, 'local');
+        return true;
+      }
     } catch {}
+    return false;
   }
 
-  function syncNaverStatus(fileName) {
+  async function loadNaverFromCache() {
+    const ok = await loadFromServer();
+    if (ok) return;
+    if (loadFromLocalCache()) return;
+    syncNaverStatus();
+  }
+
+  // naver.js 에서 업로드했을 때 compare 탭도 자동 갱신되도록 global 등록
+  window.cmpReloadNaverFromShared = async () => {
+    await loadFromServer();
+    if (cmpRawRows.length) renderAll();
+  };
+
+  // 탭 활성화 시 서버 최신본 재조회
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    loadFromServer().then(ok => { if (ok && cmpRawRows.length) renderAll(); }).catch(() => {});
+  });
+
+  function syncNaverStatus(fileName, uploadedAt, source) {
     const rows = window.naverAllRows || [];
     const statusEl = document.getElementById('cmp-naver-status');
     const resetBtn = document.getElementById('cmp-naver-reset-btn');
     if (rows.length > 0) {
+      const timeStr = window.naverShared?.formatUploadedAt(uploadedAt) || '';
+      const tag = source === 'server' ? '🌐 공유' : '💾 로컬';
       statusEl.textContent = fileName
-        ? `✅ ${fileName} (${rows.length}건 로드됨)`
-        : `✅ 네이버 데이터 ${rows.length}건 로드됨 (캐시)`;
+        ? `✅ ${fileName} (${rows.length}건) · ${tag}${timeStr ? ' ' + timeStr : ''}`
+        : `✅ 네이버 데이터 ${rows.length}건 · ${tag}${timeStr ? ' ' + timeStr : ''}`;
       statusEl.classList.add('has-data');
       resetBtn.classList.remove('hidden');
     } else {
@@ -310,21 +387,55 @@
     const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) return [];
     const headers = splitCsv(lines[0]);
-    const idx = name => headers.indexOf(name);
-    const iDate = idx('날짜'), iId = idx('광고ID'), iMedia = idx('매체'),
-          iReq = idx('요청수'), iImp = idx('노출수'), iClk = idx('클릭수'),
-          iPrf = idx('AXZ매출(원)'), iCtr = idx('CTR(%)');
+    // 공백/대소문자 변형에 관대하게 — 정확히 일치 → 공백 제거 매칭 → 부분 포함 매칭 순
+    const idx = (...cands) => {
+      for (const name of cands) {
+        const i = headers.indexOf(name);
+        if (i >= 0) return i;
+      }
+      const normed = headers.map(h => (h || '').replace(/\s+/g, '').toLowerCase());
+      for (const name of cands) {
+        const t = name.replace(/\s+/g, '').toLowerCase();
+        const i = normed.indexOf(t);
+        if (i >= 0) return i;
+      }
+      for (const name of cands) {
+        const t = name.replace(/\s+/g, '').toLowerCase();
+        const i = normed.findIndex(h => h.includes(t));
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+    const iDate  = idx('날짜', '일자');
+    const iId    = idx('광고ID', '광고 ID', '광고아이디');
+    const iMedia = idx('매체', '매체명', '미디어');
+    const iReq   = idx('요청수', '요청');
+    const iImp   = idx('노출수', '노출');
+    const iClk   = idx('클릭수', '클릭');
+    const iPrf   = idx('AXZ매출(원)', 'AXZ매출', '매출', '수익');
+    const iCtr   = idx('CTR(%)', 'CTR');
+    console.log('[parseNaverCsv] headers:', headers);
+    console.log('[parseNaverCsv] col idx:', { iDate, iId, iMedia, iReq, iImp, iClk, iPrf });
     const pn = s => {
       const v = Number(String(s || '').replace(/[,\s]/g, ''));
       return isNaN(v) ? 0 : v;
     };
     const out = [];
+    const skippedExamples = [];
+    let totalScanned = 0, matched = 0;
     for (let i = 1; i < lines.length; i++) {
       const c = splitCsv(lines[i]);
       const media = (c[iMedia] || '').trim();
       const adId  = (c[iId]    || '').trim();
+      totalScanned++;
       // 광고ID 또는 매체에 '카페' / 'cafe' 가 포함된 행 (대소문자 무관)
-      if (!/카페|cafe/i.test(adId + ' ' + media)) continue;
+      if (!/카페|cafe/i.test(adId + ' ' + media)) {
+        if (skippedExamples.length < 3 && (adId || media)) {
+          skippedExamples.push({ adId, media });
+        }
+        continue;
+      }
+      matched++;
       let date = (c[iDate] || '').trim();
       const isMonthly = date.endsWith('-00');
       if (isMonthly) date = date.slice(0, 7);
@@ -333,6 +444,13 @@
         request: pn(c[iReq]), impression: pn(c[iImp]),
         click: pn(c[iClk]), profit: pn(c[iPrf]), ctr: pn(c[iCtr]),
       });
+    }
+    console.log(`[parseNaverCsv] scanned=${totalScanned}, cafe/카페 matched=${matched}`);
+    // cafe_* 광고ID 유니크 목록
+    const cafeAdIds = [...new Set(out.map(r => r.adId).filter(id => /cafe/i.test(id)))];
+    console.log('[parseNaverCsv] cafe_* 광고ID 유니크:', cafeAdIds);
+    if (!matched && skippedExamples.length) {
+      console.warn('[parseNaverCsv] 매칭 0건. 스킵 예시:', skippedExamples);
     }
     return out;
   }
@@ -467,20 +585,69 @@
 
   function mapNaverRows(start, end) {
     const out = [];
+    // 1차 분류 + 범위 체크 (월/일 구분)
+    const classify = (adId, media) => {
+      if (NAVER_DA_RE.test(adId))   return 'naverDA';
+      if (NAVER_SA_RE.test(adId))   return 'naverSA';
+      if (NAVER_DA_RE.test(media))  return 'naverDA';
+      if (NAVER_SA_RE.test(media))  return 'naverSA';
+      return null;
+    };
+    const inDaily = (r) => !r.isMonthly && r.date >= start && r.date <= end;
+    const inMonth = (r) => {
+      if (!r.isMonthly) return false;
+      const sm = (start || '').slice(0, 7);
+      const em = (end   || '').slice(0, 7);
+      return r.date >= sm && r.date <= em;
+    };
+    // 월단위 이중합산 방지: 같은 (월, 광고ID) 조합에 일단위 행이 있으면 월단위 행은 버림.
+    //   (네이버는 일단위 + 월집계 행을 동시에 내보내는 경우가 있음)
+    const dailyKeys = new Set();
+    for (const r of (window.naverAllRows || [])) {
+      if (r.isMonthly) continue;
+      if (!inDaily(r)) continue;
+      dailyKeys.add((r.adId || r.media) + '|' + r.date.slice(0, 7));
+    }
+    const rangeIsWholeMonth = (() => {
+      if (!start || !end) return false;
+      const s = new Date(start), e = new Date(end);
+      if (isNaN(s) || isNaN(e)) return false;
+      if (s.getFullYear() !== e.getFullYear() || s.getMonth() !== e.getMonth()) return false;
+      return s.getDate() === 1 && e.getDate() === new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate();
+    })();
+
+    // 진단 집계
+    const diag = new Map();
+    const touch = (adId) => {
+      const key = adId || '(no-adId)';
+      let d = diag.get(key);
+      if (!d) { d = { total: 0, pass: 0, skipPlatform: 0, skipDate: 0, skipDupMonth: 0, dates: new Set() }; diag.set(key, d); }
+      return d;
+    };
+    let sumSA = 0, sumDA = 0;
+
     for (const r of (window.naverAllRows || [])) {
       const media = r.media || '';
       const adId  = r.adId  || '';
-      // 분류 규칙 (우선순위): 광고ID 먼저, 없으면 매체.
-      //   영문 'cafe' 포함 → naverDA
-      //   한글 '카페' 포함 → naverSA
-      let platform = null;
-      if (NAVER_DA_RE.test(adId))          platform = 'naverDA';
-      else if (NAVER_SA_RE.test(adId))     platform = 'naverSA';
-      else if (NAVER_DA_RE.test(media))    platform = 'naverDA';
-      else if (NAVER_SA_RE.test(media))    platform = 'naverSA';
-      else continue;
-      if (r.date < start || r.date > end) continue;
-      // 유닛 표시명: 광고ID 우선 (사용자가 SA/DA 구분에 쓰는 값), 없으면 매체
+      const d = touch(adId);
+      d.total++;
+      d.dates.add(r.date + (r.isMonthly ? '(M)' : ''));
+      const platform = classify(adId, media);
+      if (!platform) { d.skipPlatform++; continue; }
+      // 날짜 범위 체크
+      if (r.isMonthly) {
+        if (!inMonth(r)) { d.skipDate++; continue; }
+        // 월단위 행은 "기간이 해당 월 전체를 정확히 덮고, 같은 달에 일단위 행이 없을 때"만 포함
+        //   → 부분 범위(예: 단일 일자) 조회 시 월집계를 부분 합에 더해버리는 중복합산을 방지
+        const monthKey = (adId || media) + '|' + r.date;
+        if (dailyKeys.has(monthKey) || !rangeIsWholeMonth) { d.skipDupMonth++; continue; }
+      } else {
+        if (!inDaily(r)) { d.skipDate++; continue; }
+      }
+      d.pass++;
+      const profit = Number(r.profit || 0);
+      if (platform === 'naverSA') sumSA += profit;
+      else sumDA += profit;
       const unit = adId || media;
       out.push({
         platform,
@@ -489,9 +656,27 @@
         request:    Number(r.request    || 0),
         impression: Number(r.impression || 0),
         click:      Number(r.click      || 0),
-        profit:     Number(r.profit     || 0),
+        profit,
       });
     }
+    // 진단 로그
+    try {
+      const table = [];
+      for (const [adId, d] of diag.entries()) {
+        if (!/카페|cafe/i.test(adId)) continue;
+        table.push({
+          adId,
+          총행수: d.total,
+          통과: d.pass,
+          '스킵(플랫폼)': d.skipPlatform,
+          '스킵(날짜)': d.skipDate,
+          '스킵(월중복)': d.skipDupMonth,
+          dates: [...d.dates].slice(0, 5).join(', ') + (d.dates.size > 5 ? ` …+${d.dates.size-5}` : ''),
+        });
+      }
+      console.log(`[mapNaverRows] range=${start}~${end} | SA=${sumSA.toLocaleString()}원  DA=${sumDA.toLocaleString()}원  (월전체기간=${rangeIsWholeMonth})`);
+      if (table.length) console.table(table);
+    } catch {}
     return out;
   }
 
@@ -838,7 +1023,10 @@
       data: allKeys.map(k => valueAt(p.key, k)),
       borderColor: p.color,
       backgroundColor: p.color + '22',
-      tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2,
+      tension: 0.3, fill: false,
+      pointRadius: 0, pointHoverRadius: 5,   // 평상시 점 숨김, hover 시만 표시
+      pointBackgroundColor: p.color,
+      borderWidth: 2,
     }));
 
     // 전체 합계 라인 — 지표에 따라 합산 or eCPM 재계산
@@ -962,7 +1150,7 @@
       kakao:   `<span class="cmp-badge cmp-badge-kakao">🟡 카카오</span>`,
       google:  `<span class="cmp-badge cmp-badge-google">🔵 구글</span>`,
       naverSA: `<span class="cmp-badge cmp-badge-naver-sa">🟢 네이버 SA</span>`,
-      naverDA: `<span class="cmp-badge cmp-badge-naver-da">🟩 네이버 DA</span>`,
+      naverDA: `<span class="cmp-badge cmp-badge-naver-da">🟪 네이버 DA</span>`,
     }[p] || p);
 
     // 플랫폼 그룹 첫 행에 구분선 클래스 추가
@@ -972,14 +1160,14 @@
       prevPlatform = r.platform;
       return `
       <tr class="cmp-row-${r.platform}${isGroupStart ? ' cmp-group-start' : ''}">
-        <td>${badge(r.platform)}</td>
-        <td>${r.unit}</td>
-        <td>${num(r.impression)}</td>
-        <td>${num(r.click)}</td>
-        <td>${pct(r.ctr)}</td>
-        <td>${krw(r.ecpm)}</td>
-        <td><strong>${krw(r.profit)}</strong></td>
-        <td>${pct(r.share)}</td>
+        <td class="cmp-cell-platform">${badge(r.platform)}</td>
+        <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
+        <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
+        <td class="cmp-cell-num">${num(r.impression)}</td>
+        <td class="cmp-cell-num">${num(r.click)}</td>
+        <td class="cmp-cell-num">${pct(r.ctr)}</td>
+        <td class="cmp-cell-num">${krw(r.ecpm)}</td>
+        <td class="cmp-cell-num">${pct(r.share)}</td>
       </tr>`;
     }).join('');
 
@@ -1001,5 +1189,73 @@
     a.download = `cafe-compare-${Date.now()}.csv`;
     a.click();
   }
+
+  // ── 진단 헬퍼
+  // 사용법:
+  //   __cmpDebug()                             → 전체 카페 광고ID별 집계
+  //   __cmpDebug('2026-04-21')                 → 특정 일자 단일
+  //   __cmpDebug('2026-04-01', '2026-04-21')   → 기간
+  //   __cmpDebug({start:'2026-04-21', end:'2026-04-21', platform:'naverSA'})
+  window.__cmpDebug = function (a, b) {
+    let start = '', end = '', platformFilter = '';
+    if (typeof a === 'string' && typeof b === 'string') { start = a; end = b; }
+    else if (typeof a === 'string') { start = a; end = a; }
+    else if (a && typeof a === 'object') { start = a.start || ''; end = a.end || start; platformFilter = a.platform || ''; }
+    const inRange = (r) => {
+      if (!start && !end) return true;
+      if (r.isMonthly) {
+        const rm = r.date;
+        const sm = start.slice(0, 7), em = end.slice(0, 7);
+        return rm >= sm && rm <= em;
+      }
+      return r.date >= start && r.date <= end;
+    };
+    // 분류: mapNaverRows와 동일한 우선순위 규칙
+    const classify = (r) => {
+      const adId = r.adId || '', media = r.media || '';
+      if (/cafe/i.test(adId)) return 'naverDA';
+      if (/카페/.test(adId))  return 'naverSA';
+      if (/cafe/i.test(media)) return 'naverDA';
+      if (/카페/.test(media))  return 'naverSA';
+      return '(no-match)';
+    };
+    const rows = window.naverAllRows || [];
+    const cafeRows = rows.filter(r => /카페|cafe/i.test((r.adId || '') + ' ' + (r.media || '')));
+    const byId = new Map();
+    let totalSA = 0, totalDA = 0, totalOther = 0, skippedDate = 0;
+    for (const r of cafeRows) {
+      const plat = classify(r);
+      if (platformFilter && plat !== platformFilter) continue;
+      if (!inRange(r)) { skippedDate++; continue; }
+      const k = r.adId || '(no-adId)';
+      let d = byId.get(k);
+      if (!d) { d = { platform: plat, rows: 0, dates: new Set(), media: new Set(), profit: 0, monthly: 0, daily: 0 }; byId.set(k, d); }
+      d.rows++;
+      d.dates.add(r.date + (r.isMonthly ? '(M)' : ''));
+      if (r.media) d.media.add(r.media);
+      d.profit += Number(r.profit || 0);
+      if (r.isMonthly) d.monthly++; else d.daily++;
+      if (plat === 'naverSA') totalSA += Number(r.profit || 0);
+      else if (plat === 'naverDA') totalDA += Number(r.profit || 0);
+      else totalOther += Number(r.profit || 0);
+    }
+    const out = [];
+    for (const [adId, d] of byId.entries()) {
+      out.push({
+        adId,
+        platform: d.platform,
+        '행수': d.rows,
+        '일단위': d.daily,
+        '월단위': d.monthly,
+        '수익합': Math.round(d.profit),
+        '날짜샘플': [...d.dates].slice(0, 5).join(', ') + (d.dates.size > 5 ? ` …+${d.dates.size-5}` : ''),
+      });
+    }
+    out.sort((x, y) => y['수익합'] - x['수익합']);
+    const rangeLabel = (start || end) ? `${start}~${end}` : '(전 기간)';
+    console.log(`[__cmpDebug] 기간=${rangeLabel} 필터=${platformFilter || '(전체)'} | SA=${totalSA.toLocaleString()}원  DA=${totalDA.toLocaleString()}원  기타=${totalOther.toLocaleString()}원  범위밖=${skippedDate}건`);
+    console.table(out);
+    return { totalSA, totalDA, totalOther, rows: out };
+  };
 
 })();

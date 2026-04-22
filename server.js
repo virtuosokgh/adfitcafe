@@ -1,7 +1,26 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+const fs = require('fs');
 const { runReport: runGoogleReport } = require('./lib/google-ad-manager');
+
+// .env.local 자동 로드 (Node 20+ 에서도 --env-file 플래그 없이 동작하도록)
+(function loadEnvLocal() {
+  try {
+    const envPath = path.join(__dirname, '.env.local');
+    if (!fs.existsSync(envPath)) return;
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!m) continue;
+      let [, k, v] = m;
+      if (!process.env[k]) {
+        v = v.replace(/^['"]|['"]$/g, '');  // 앞뒤 따옴표 제거
+        process.env[k] = v;
+      }
+    }
+  } catch (_) {}
+})();
 
 const app = express();
 const PORT = 3000;
@@ -149,6 +168,114 @@ app.get('/api/google/report', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     inflight.delete(cacheKey);
+  }
+});
+
+// -------------------------------------------------------------
+// 네이버 CSV 공유 저장소 (Vercel Blob) — 로컬 개발용 프록시
+//   api/naver-csv.js 와 동일한 동작을 Express 에서 제공
+// -------------------------------------------------------------
+const CSV_KEY  = 'naver/latest.csv';
+const META_KEY = 'naver/latest.meta.json';
+const MAX_CSV_BYTES = 10 * 1024 * 1024;
+
+// CSV body parser (raw text)
+app.use('/api/naver-csv', express.text({ type: '*/*', limit: '12mb' }));
+
+async function loadBlobSdk() {
+  try { return await import('@vercel/blob'); }
+  catch { return null; }
+}
+
+app.post('/api/naver-csv', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정 (.env.local 확인)' });
+  }
+  const csv = typeof req.body === 'string' ? req.body : '';
+  if (!csv || csv.length < 10) return res.status(400).json({ error: 'empty CSV body' });
+  if (csv.length > MAX_CSV_BYTES) return res.status(413).json({ error: 'file too large' });
+  const fileName = String(req.query.fileName || 'naver.csv').slice(0, 200);
+  const uploader = String(req.query.uploader || '').slice(0, 80);
+  const uploadedAt = Date.now();
+  try {
+    const csvBlob = await blob.put(CSV_KEY, csv, {
+      access: 'public',
+      contentType: 'text/csv; charset=utf-8',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      cacheControlMaxAge: 0,
+    });
+    const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length, csvUrl: csvBlob.url };
+    await blob.put(META_KEY, JSON.stringify(metaPayload), {
+      access: 'public',
+      contentType: 'application/json; charset=utf-8',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      cacheControlMaxAge: 0,
+    });
+    res.json({ ok: true, ...metaPayload });
+  } catch (err) {
+    console.error('Blob upload failed:', err);
+    res.status(500).json({ error: err.message || 'upload failed' });
+  }
+});
+
+app.get('/api/naver-csv', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정 (.env.local 확인)' });
+  }
+  try {
+    let metaHead = null;
+    try { metaHead = await blob.head(META_KEY); } catch {}
+    if (!metaHead) return res.json({ exists: false });
+    let meta = null;
+    try {
+      const r = await fetch(metaHead.url);
+      if (r.ok) meta = await r.json();
+    } catch {}
+    let csvHead = null;
+    try { csvHead = await blob.head(CSV_KEY); } catch {}
+    if (!csvHead) return res.json({ exists: false });
+    let csv = '';
+    try {
+      const r = await fetch(meta?.csvUrl || csvHead.url);
+      if (r.ok) csv = await r.text();
+    } catch {}
+    if (!csv) return res.json({ exists: false });
+    res.json({
+      exists: true,
+      fileName:   meta?.fileName   || 'naver.csv',
+      uploader:   meta?.uploader   || '',
+      uploadedAt: meta?.uploadedAt || null,
+      bytes: csv.length,
+      csv,
+    });
+  } catch (err) {
+    console.error('Blob fetch failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/naver-csv', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정' });
+  }
+  try {
+    for (const key of [CSV_KEY, META_KEY]) {
+      try {
+        const h = await blob.head(key);
+        if (h?.url) await blob.del(h.url);
+      } catch {}
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

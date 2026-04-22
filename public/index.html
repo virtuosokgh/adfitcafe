@@ -598,7 +598,7 @@
         </div>
         <div class="card cmp-card cmp-card-naver-da" data-card="naverDA">
           <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
-          <div class="card-label">🟩 네이버 DA</div>
+          <div class="card-label">🟪 네이버 DA</div>
           <div class="card-value cmp-copy" id="cmp-naverDA-profit">-</div>
           <div class="cmp-card-sub" id="cmp-naverDA-share">-</div>
           <div class="cmp-card-metrics">
@@ -654,15 +654,25 @@
         </div>
         <div class="table-wrapper">
           <table id="cmp-table">
+            <colgroup>
+              <col class="cmp-col-platform" />
+              <col class="cmp-col-unit" />
+              <col class="cmp-col-profit" />
+              <col class="cmp-col-impression" />
+              <col class="cmp-col-click" />
+              <col class="cmp-col-ctr" />
+              <col class="cmp-col-ecpm" />
+              <col class="cmp-col-share" />
+            </colgroup>
             <thead>
               <tr>
                 <th data-col="platform">플랫폼<span class="sort-icon">↕</span></th>
                 <th data-col="unit">유닛명<span class="sort-icon">↕</span></th>
+                <th data-col="profit">수익<span class="sort-icon">↕</span></th>
                 <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
                 <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
                 <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
                 <th data-col="ecpm">eCPM<span class="sort-icon">↕</span></th>
-                <th data-col="profit">수익<span class="sort-icon">↕</span></th>
                 <th data-col="share">점유율<span class="sort-icon">↕</span></th>
               </tr>
             </thead>
@@ -678,6 +688,7 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
   <script src="app.js"></script>
+  <script src="naver-shared.js"></script>
   <script src="naver.js"></script>
   <script src="google.js"></script>
   <script src="compare.js"></script>

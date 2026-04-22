@@ -835,7 +835,7 @@ function handleNaverFile(file) {
   }
   const reader = new FileReader();
   reader.readAsArrayBuffer(file);
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     const buffer = e.target.result;
     let text = new TextDecoder('utf-8').decode(buffer);
     const testLine = text.replace(/^\uFEFF/, '').split('\n')[0];
@@ -847,18 +847,36 @@ function handleNaverFile(file) {
       alert('카페 매체 데이터가 없거나 형식이 올바르지 않습니다.\n"매체", "AXZ매출(원)" 컬럼이 포함된 네이버 광고매출 리포트 파일을 올려주세요.');
       return;
     }
-    naverAllRows = rows;
-    window.naverAllRows = rows;  // compare.js에서 접근
-    // 캐시 저장 (다음 접속 시 자동 복원용, csv 원본도 함께 저장 → 필터 규칙 변경 시 재파싱 가능)
-    try {
-      localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
-        fileName: file.name, uploadedAt: new Date().toISOString(), rows, csv: text
-      }));
-    } catch (_) { /* 용량 초과 시 무시 */ }
-    const sizeKB = Math.round(file.size / 1024);
-    naverFileNameEl.textContent = `📄 ${file.name}  (${rows.length}건 · ${sizeKB}KB)`;
+
+    // 업로드 상태 표시
+    naverFileNameEl.textContent = `📤 ${file.name} 서버에 공유 업로드 중...`;
     naverUploadZone.classList.add('hidden');
     naverFileInfo.classList.remove('hidden');
+
+    // 서버에 공유 업로드 (Vercel Blob)
+    let uploadedAt = Date.now();
+    try {
+      if (window.naverShared) {
+        const meta = await window.naverShared.upload(file, text);
+        if (meta?.uploadedAt) uploadedAt = meta.uploadedAt;
+      }
+    } catch (err) {
+      alert('⚠️ 서버 공유 업로드 실패: ' + err.message + '\n(내 브라우저에는 저장되었지만 다른 사용자와 공유되지 않을 수 있음)');
+    }
+
+    naverAllRows = rows;
+    window.naverAllRows = rows;  // compare.js에서 접근
+
+    // 로컬에도 오프라인 fallback 용으로 저장
+    try {
+      localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
+        fileName: file.name, uploadedAt: new Date(uploadedAt).toISOString(), rows, csv: text
+      }));
+    } catch (_) { /* 용량 초과 시 무시 */ }
+
+    const sizeKB = Math.round(file.size / 1024);
+    const timeStr = window.naverShared?.formatUploadedAt(uploadedAt) || '';
+    naverFileNameEl.textContent = `📄 ${file.name}  (${rows.length}건 · ${sizeKB}KB · 공유됨 ${timeStr})`;
     naverPeriodTabsEl.style.display = '';
     naverControls.style.display     = '';
     if (!naverMcsAdId) {
@@ -870,6 +888,11 @@ function handleNaverFile(file) {
     updateNaverFilters(rows);
     setNaverDatesFromData();
     naverReRender();
+
+    // compare 탭이 이미 렌더돼 있으면 자동 갱신
+    if (typeof window.cmpReloadNaverFromShared === 'function') {
+      try { window.cmpReloadNaverFromShared(); } catch {}
+    }
   };
 }
 
@@ -890,8 +913,19 @@ naverUploadZone.addEventListener('drop', e => {
 });
 
 // ── 파일 리셋 ─────────────────────────────
-naverFileResetBtn.addEventListener('click', () => {
+naverFileResetBtn.addEventListener('click', async () => {
+  const confirmMsg =
+    '⚠️ 서버에 업로드된 공유 CSV를 삭제합니다.\n' +
+    '모든 사용자에게 영향을 줍니다. 계속할까요?';
+  if (!confirm(confirmMsg)) return;
+
+  // 서버에서도 삭제
+  try {
+    if (window.naverShared) await window.naverShared.remove();
+  } catch (_) {}
+
   naverAllRows = [];
+  window.naverAllRows = [];
   naverChartMetric = 'profit';
   if (naverChartInstance) { naverChartInstance.destroy(); naverChartInstance = null; }
   naverSortCol = null; naverSortDir = 1;
@@ -911,8 +945,13 @@ naverFileResetBtn.addEventListener('click', () => {
   if (naverCmpFpEndD) naverCmpFpEndD.clear();
   // naver-summary-cards chart-active 초기화
   document.querySelectorAll('#naver-summary-cards .card').forEach((c, i) => c.classList.toggle('chart-active', i === 0));
-  localStorage.removeItem(NAVER_CACHE_KEY); // 캐시 삭제
+  localStorage.removeItem(NAVER_CACHE_KEY); // 로컬 캐시 삭제
   switchNaverPeriod('daily');
+
+  // compare 탭도 클리어
+  if (typeof window.cmpReloadNaverFromShared === 'function') {
+    try { window.cmpReloadNaverFromShared(); } catch {}
+  }
 });
 
 // ── 요약 카드 클릭 → 차트 지표 전환 ─────
@@ -941,48 +980,92 @@ document.getElementById('naver-search-btn').addEventListener('click', naverReRen
 // ── CSV 다운로드 버튼 ─────────────────────
 naverCsvDlBtn.addEventListener('click', downloadNaverCSV);
 
-// ── 캐시 복원 ─────────────────────────────
-function loadNaverFromCache() {
+// ── 캐시/서버 복원 ─────────────────────────
+// 1순위: 서버 Vercel Blob (모든 유저 공유)
+// 2순위: 로컬 localStorage (오프라인 또는 서버 없음)
+function applyNaverRows(rows, fileName, uploadedAt, sourceLabel) {
+  if (!rows || rows.length === 0) return false;
+  naverAllRows = rows;
+  window.naverAllRows = rows;  // compare.js에서 접근
+  const dateStr = window.naverShared?.formatUploadedAt(uploadedAt) ||
+    (uploadedAt ? new Date(uploadedAt).toLocaleString('ko-KR') : '');
+  const tag = sourceLabel === 'server' ? '공유됨' : '저장됨';
+  naverFileNameEl.textContent = `📄 ${fileName}  (${rows.length}건 · ${tag} ${dateStr})`;
+  naverUploadZone.classList.add('hidden');
+  naverFileInfo.classList.remove('hidden');
+  naverPeriodTabsEl.style.display = '';
+  naverControls.style.display     = '';
+  if (!naverMcsAdId) {
+    naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
+  }
+  if (!naverMcsCmpAdId) {
+    naverMcsCmpAdId = new MultiCheckSelect(document.getElementById('mcs-naver-cmp-adid'), '전체 광고ID', naverReRender);
+  }
+  updateNaverFilters(rows);
+  setNaverDatesFromData();
+  naverReRender();
+  return true;
+}
+
+function loadFromLocalCache() {
   try {
     const raw = localStorage.getItem(NAVER_CACHE_KEY);
-    if (!raw) return;
+    if (!raw) return false;
     const parsed = JSON.parse(raw);
     const { fileName, uploadedAt, csv } = parsed;
     let rows = parsed.rows;
-    // 원본 CSV가 있으면 최신 필터로 재파싱 (예: 영문 cafe 포함)
     if (typeof csv === 'string' && csv.length) {
       const fresh = parseNaverCSV(csv);
       if (fresh.length) {
         rows = fresh;
         try {
-          localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
-            ...parsed, rows: fresh
-          }));
+          localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({ ...parsed, rows: fresh }));
         } catch (_) {}
       }
     }
-    if (!rows || rows.length === 0) return;
-    naverAllRows = rows;
-    window.naverAllRows = rows;  // compare.js에서 접근
-    const dateStr = new Date(uploadedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
-    naverFileNameEl.textContent = `📄 ${fileName}  (${rows.length}건 · 저장됨 ${dateStr})`;
-    naverUploadZone.classList.add('hidden');
-    naverFileInfo.classList.remove('hidden');
-    naverPeriodTabsEl.style.display = '';
-    naverControls.style.display     = '';
-    if (!naverMcsAdId) {
-      naverMcsAdId = new MultiCheckSelect(document.getElementById('mcs-naver-adid'), '전체 광고ID', naverReRender);
-    }
-    if (!naverMcsCmpAdId) {
-      naverMcsCmpAdId = new MultiCheckSelect(document.getElementById('mcs-naver-cmp-adid'), '전체 광고ID', naverReRender);
-    }
-    updateNaverFilters(rows);
-    setNaverDatesFromData();
-    naverReRender();
+    return applyNaverRows(rows, fileName, uploadedAt, 'local');
   } catch (_) {
-    localStorage.removeItem(NAVER_CACHE_KEY); // 손상된 캐시 삭제
+    localStorage.removeItem(NAVER_CACHE_KEY);
+    return false;
   }
 }
+
+async function loadFromServer() {
+  if (!window.naverShared) return false;
+  const data = await window.naverShared.fetchLatest();
+  if (!data || !data.csv) return false;
+  const rows = parseNaverCSV(data.csv);
+  if (!rows.length) return false;
+  // 로컬에도 싱크 (오프라인 fallback)
+  try {
+    localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
+      fileName: data.fileName,
+      uploadedAt: new Date(data.uploadedAt).toISOString(),
+      rows,
+      csv: data.csv,
+    }));
+  } catch (_) {}
+  return applyNaverRows(rows, data.fileName, data.uploadedAt, 'server');
+}
+
+async function loadNaverFromCache() {
+  // 1) 서버 먼저 시도 — 성공하면 바로 렌더
+  const ok = await loadFromServer();
+  if (ok) return;
+  // 2) 서버 없거나 실패하면 로컬 캐시 fallback
+  loadFromLocalCache();
+}
+
+// 탭 다시 활성화될 때 서버 최신본으로 갱신 (다른 유저가 업로드했을 수 있음)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  loadFromServer().catch(() => {});
+});
+
+// compare 탭에서 업로드/삭제했을 때 호출됨
+window.naverReloadFromShared = async () => {
+  await loadFromServer();
+};
 
 // ── 초기화 ────────────────────────────────
 initNaverFlatpickr();
