@@ -481,17 +481,27 @@
       }
     })();
 
-    // 구글 (느림 10~18s)
+    // 구글 (느림 6~15s)
+    let googleErrMsg = '';
     const googlePromise = (async () => {
       try {
         const res = await fetch(`/api/google/report?startDate=${sYMD}&endDate=${eYMD}`);
-        if (!res.ok) throw new Error('구글 API 실패');
+        if (!res.ok) {
+          // 서버가 보낸 에러 메시지 파싱 시도
+          let detail = `HTTP ${res.status}`;
+          try {
+            const e = await res.json();
+            if (e && e.error) detail = e.error;
+          } catch {}
+          throw new Error(detail);
+        }
         const j = await res.json();
         gRows = mapGoogleRows(j);
         setCuteState('google', 'done', `${gRows.length}건`);
         googleDone = true;
         renderPartial();
       } catch (err) {
+        googleErrMsg = err.message || '구글 API 실패';
         setCuteState('google', 'error', '실패');
         googleDone = true;
         console.error('Google:', err);
@@ -519,16 +529,20 @@
         setCuteMsg('😿 데이터가 없어요...');
         setTimeout(() => {
           loadingEl.classList.add('hidden');
-          errorEl.textContent = '해당 기간에 카페 수익 데이터가 없습니다.';
+          errorEl.textContent = googleErrMsg
+            ? `구글 API 오류: ${googleErrMsg}`
+            : '해당 기간에 카페 수익 데이터가 없습니다.';
           errorEl.classList.remove('hidden');
         }, 800);
         return;
       }
 
-      setCuteMsg('🎉 모두 도착! 결과를 정리할게요...');
+      setCuteMsg(googleErrMsg
+        ? `⚠️ 구글 실패 (${googleErrMsg}) — 카카오/네이버만 표시합니다`
+        : '🎉 모두 도착! 결과를 정리할게요...');
       finalizeAfterFetch(cacheKey);
-      // 완료 애니메이션 잠깐 보여주고 숨기기
-      setTimeout(() => loadingEl.classList.add('hidden'), 600);
+      // 에러 시 메시지 더 오래 표시
+      setTimeout(() => loadingEl.classList.add('hidden'), googleErrMsg ? 2500 : 600);
     } catch (err) {
       clearTimeout(msgTimer1); clearTimeout(msgTimer2);
       loadingEl.classList.add('hidden');
