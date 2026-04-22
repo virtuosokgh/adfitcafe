@@ -560,48 +560,64 @@
 
       <!-- 플랫폼별 수익 카드 -->
       <div class="summary-cards cmp-platform-cards" id="cmp-summary" style="display:none;">
-        <div class="card cmp-card cmp-card-kakao">
+        <div class="card cmp-card cmp-card-kakao" data-card="kakao">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
           <div class="card-label">🟡 다음(카카오)</div>
-          <div class="card-value" id="cmp-kakao-profit">-</div>
+          <div class="card-value cmp-copy" id="cmp-kakao-profit">-</div>
           <div class="cmp-card-sub" id="cmp-kakao-share">-</div>
           <div class="cmp-card-metrics">
-            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val" id="cmp-kakao-req">-</span></div>
-            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val" id="cmp-kakao-imp">-</span></div>
-            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val" id="cmp-kakao-req-ecpm">-</span></div>
-            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val" id="cmp-kakao-imp-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy" id="cmp-kakao-req">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy" id="cmp-kakao-imp">-</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy" id="cmp-kakao-req-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy" id="cmp-kakao-imp-ecpm">-</span></div>
           </div>
         </div>
-        <div class="card cmp-card cmp-card-google">
+        <div class="card cmp-card cmp-card-google" data-card="google">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
           <div class="card-label">🔵 구글 애드매니저</div>
-          <div class="card-value" id="cmp-google-profit">-</div>
+          <div class="card-value cmp-copy" id="cmp-google-profit">-</div>
           <div class="cmp-card-sub" id="cmp-google-share">-</div>
           <div class="cmp-card-metrics">
-            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val" id="cmp-google-req">-</span></div>
-            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val" id="cmp-google-imp">-</span></div>
-            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val" id="cmp-google-req-ecpm">-</span></div>
-            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val" id="cmp-google-imp-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy" id="cmp-google-req">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy" id="cmp-google-imp">-</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy" id="cmp-google-req-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy" id="cmp-google-imp-ecpm">-</span></div>
           </div>
         </div>
-        <div class="card cmp-card cmp-card-naver">
-          <div class="card-label">🟢 네이버</div>
-          <div class="card-value" id="cmp-naver-profit">-</div>
-          <div class="cmp-card-sub" id="cmp-naver-share">-</div>
+        <div class="card cmp-card cmp-card-naver-sa" data-card="naverSA">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
+          <div class="card-label">🟢 네이버 SA</div>
+          <div class="card-value cmp-copy" id="cmp-naverSA-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-naverSA-share">-</div>
           <div class="cmp-card-metrics">
-            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val" id="cmp-naver-req">-</span></div>
-            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val" id="cmp-naver-imp">-</span></div>
-            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val" id="cmp-naver-req-ecpm">-</span></div>
-            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val" id="cmp-naver-imp-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy" id="cmp-naverSA-req">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy" id="cmp-naverSA-imp">-</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy" id="cmp-naverSA-req-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy" id="cmp-naverSA-imp-ecpm">-</span></div>
           </div>
         </div>
-        <div class="card total cmp-card cmp-card-total">
+        <div class="card cmp-card cmp-card-naver-da" data-card="naverDA">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
+          <div class="card-label">🟩 네이버 DA</div>
+          <div class="card-value cmp-copy" id="cmp-naverDA-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-naverDA-share">-</div>
+          <div class="cmp-card-metrics">
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy" id="cmp-naverDA-req">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy" id="cmp-naverDA-imp">-</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy" id="cmp-naverDA-req-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy" id="cmp-naverDA-imp-ecpm">-</span></div>
+          </div>
+        </div>
+        <div class="card total cmp-card cmp-card-total" data-card="total">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle title="클릭하면 선택 기간의 일평균으로 전환">일평균</button>
           <div class="card-label">📊 전체 합계</div>
-          <div class="card-value" id="cmp-total-profit">-</div>
+          <div class="card-value cmp-copy" id="cmp-total-profit">-</div>
           <div class="cmp-card-sub" id="cmp-total-sub">-</div>
           <div class="cmp-card-metrics">
-            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val" id="cmp-total-req">-</span></div>
-            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val" id="cmp-total-imp">-</span></div>
-            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val" id="cmp-total-req-ecpm">-</span></div>
-            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val" id="cmp-total-imp-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy" id="cmp-total-req">-</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy" id="cmp-total-imp">-</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy" id="cmp-total-req-ecpm">-</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy" id="cmp-total-imp-ecpm">-</span></div>
           </div>
         </div>
       </div>
@@ -609,7 +625,16 @@
       <!-- 차트 (일자별 추이 + 점유율) -->
       <div class="cmp-charts-grid" id="cmp-charts" style="display:none;">
         <div class="chart-section cmp-chart-trend">
-          <h2>일자별 수익 추이</h2>
+          <div class="cmp-chart-trend-header">
+            <h2>일자별 <span id="cmp-chart-metric-label">수익</span> 추이</h2>
+            <select id="cmp-chart-metric" class="cmp-chart-metric-select">
+              <option value="profit">총 수익</option>
+              <option value="request">총 요청</option>
+              <option value="impression">총 노출</option>
+              <option value="reqEcpm">요청 eCPM</option>
+              <option value="impEcpm">노출 eCPM</option>
+            </select>
+          </div>
           <canvas id="cmp-trend-chart"></canvas>
         </div>
         <div class="chart-section cmp-chart-pie">

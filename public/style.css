@@ -903,7 +903,19 @@ tbody td:nth-child(3) { text-align: left; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-/* 플랫폼 카드 */
+/* 플랫폼 카드 — 5개(카카오/구글/네이버 SA/네이버 DA/합계)에 맞춘 그리드 */
+.summary-cards.cmp-platform-cards {
+  grid-template-columns: repeat(5, 1fr);
+}
+@media (max-width: 1200px) {
+  .summary-cards.cmp-platform-cards { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .summary-cards.cmp-platform-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .summary-cards.cmp-platform-cards { grid-template-columns: 1fr; }
+}
 .cmp-platform-cards .cmp-card {
   cursor: default;
   position: relative;
@@ -916,10 +928,103 @@ tbody td:nth-child(3) { text-align: left; }
   width: 5px; height: 100%;
   background: #999;
 }
-.cmp-platform-cards .cmp-card-kakao::before   { background: #FBB034; }
-.cmp-platform-cards .cmp-card-google::before  { background: #1A73E8; }
-.cmp-platform-cards .cmp-card-naver::before   { background: #03C75A; }
-.cmp-platform-cards .cmp-card-total::before   { background: linear-gradient(180deg, #FBB034, #1A73E8, #03C75A); width: 6px; }
+.cmp-platform-cards .cmp-card-kakao::before    { background: #FBB034; }
+.cmp-platform-cards .cmp-card-google::before   { background: #1A73E8; }
+.cmp-platform-cards .cmp-card-naver::before    { background: #03C75A; }  /* 이전 호환 */
+.cmp-platform-cards .cmp-card-naver-sa::before { background: #03C75A; }
+.cmp-platform-cards .cmp-card-naver-da::before { background: #16A34A; }
+.cmp-platform-cards .cmp-card-total::before    { background: linear-gradient(180deg, #FBB034, #1A73E8, #03C75A, #16A34A); width: 6px; }
+
+/* 일평균 토글 버튼 (카드 우측 상단) */
+.cmp-card-toggle {
+  position: absolute;
+  top: 10px; right: 10px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7280;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  z-index: 1;
+}
+.cmp-card-toggle:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #111827;
+}
+.cmp-card-toggle.on {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-toggle {
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.15);
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-toggle:hover {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+.cmp-platform-cards .cmp-card-total .cmp-card-toggle.on {
+  background: #fff;
+  color: #111827;
+  border-color: #fff;
+}
+
+/* 숫자 복사 인터랙션 */
+.cmp-copy {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -3px;
+  transition: background 0.12s ease;
+}
+.cmp-copy:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+.cmp-copy.copied {
+  background: rgba(16, 185, 129, 0.18);
+  transition: background 0.05s ease;
+}
+.cmp-platform-cards .cmp-card-total .cmp-copy:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.cmp-platform-cards .cmp-card-total .cmp-copy.copied {
+  background: rgba(16, 185, 129, 0.35);
+}
+
+/* 트렌드 차트 헤더 (제목 + 지표 드롭다운) */
+.cmp-chart-trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.cmp-chart-trend-header h2 { margin: 0; }
+.cmp-chart-metric-select {
+  padding: 6px 30px 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s ease;
+}
+.cmp-chart-metric-select:hover { border-color: #9CA3AF; }
+.cmp-chart-metric-select:focus { border-color: #3B82F6; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
 
 .cmp-card-sub {
   margin-top: 6px;
@@ -1000,9 +1105,11 @@ tbody td:nth-child(3) { text-align: left; }
   font-weight: 700;
   white-space: nowrap;
 }
-.cmp-badge-kakao  { background: #FFF6D8; color: #8A6700; }
-.cmp-badge-google { background: #E0ECFB; color: #0B4F9E; }
-.cmp-badge-naver  { background: #D5F4E3; color: #016B30; }
+.cmp-badge-kakao    { background: #FFF6D8; color: #8A6700; }
+.cmp-badge-google   { background: #E0ECFB; color: #0B4F9E; }
+.cmp-badge-naver    { background: #D5F4E3; color: #016B30; }
+.cmp-badge-naver-sa { background: #D5F4E3; color: #016B30; }
+.cmp-badge-naver-da { background: #DCFCE7; color: #14532D; }
 
 /* 테이블 행 좌측 컬러 바 */
 #cmp-table tbody tr.cmp-row-kakao  { border-left: 3px solid #FBB034; }

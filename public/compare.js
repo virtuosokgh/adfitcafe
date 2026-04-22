@@ -11,7 +11,9 @@
   const CMP_NAVER_CACHE_KEY = 'naver_csv_cache';
   const KAKAO_RE  = /(카페|테이블|cafe)/i;
   const GOOGLE_RE = /카페|cafe/i;
-  const NAVER_RE  = /카페|cafe/i;
+  // 네이버 서브타입: 한글 '카페' → SA, 영문 'cafe' → DA
+  const NAVER_SA_RE = /카페/;
+  const NAVER_DA_RE = /cafe/i;
 
   // 상태
   let cmpPeriod = 'daily';
@@ -19,6 +21,16 @@
   let cmpSortState = { col: 'profit', dir: 'desc' };
   let cmpTrendChart = null;
   let cmpPieChart   = null;
+  let cmpChartMetric = 'profit';   // profit | request | impression | reqEcpm | impEcpm
+  let cmpCurrentRange = { start: '', end: '' };  // 일평균 계산용
+
+  // 플랫폼 메타 (색상/라벨/mcs 그룹)
+  const PLATFORMS = [
+    { key: 'kakao',   label: '🟡 다음(카카오)', color: '#FBB034' },
+    { key: 'google',  label: '🔵 구글',         color: '#1A73E8' },
+    { key: 'naverSA', label: '🟢 네이버 SA',    color: '#03C75A' },
+    { key: 'naverDA', label: '🟩 네이버 DA',    color: '#16A34A' },
+  ];
 
   // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
   // v2: request 필드 추가됨 → v1 캐시는 자동 무시
@@ -138,6 +150,40 @@
     // CSV 다운로드
     document.getElementById('cmp-csv-btn').addEventListener('click', downloadCsv);
 
+    // 카드 — 일평균 토글 + 숫자 클릭 복사 (이벤트 위임)
+    const summaryEl = document.getElementById('cmp-summary');
+    if (summaryEl) {
+      summaryEl.addEventListener('click', e => {
+        // 일평균 토글
+        const toggleBtn = e.target.closest('[data-avg-toggle]');
+        if (toggleBtn) {
+          const card = toggleBtn.closest('.cmp-card');
+          if (card) {
+            const on = card.dataset.avg === '1';
+            card.dataset.avg = on ? '0' : '1';
+            toggleBtn.classList.toggle('on', !on);
+            if (cmpRawRows.length) renderSummary(applyUnitFilter(cmpRawRows));
+          }
+          return;
+        }
+        // 숫자 복사
+        const copyEl = e.target.closest('.cmp-copy');
+        if (copyEl) {
+          copyCardValue(copyEl);
+          return;
+        }
+      });
+    }
+
+    // 차트 지표 드롭다운
+    const chartMetricSel = document.getElementById('cmp-chart-metric');
+    if (chartMetricSel) {
+      chartMetricSel.addEventListener('change', () => {
+        cmpChartMetric = chartMetricSel.value;
+        if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
+      });
+    }
+
     // 네이버 캐시에서 복원
     loadNaverFromCache();
     syncNaverStatus();
@@ -145,6 +191,22 @@
     // 탭 첫 진입 시 자동 조회 (기본 기간) → MCS 미리 채우기
     //   flatpickr 가 defaultDate 를 input 에 반영할 시간을 줌
     setTimeout(() => fetchAndRender(), 50);
+  }
+
+  // 카드 숫자만 추출해 클립보드에 복사 + 짧은 피드백
+  function copyCardValue(el) {
+    const raw = el.dataset.raw;
+    const text = (raw !== undefined && raw !== '')
+      ? String(raw)
+      : String(el.textContent || '').replace(/[^\d.-]/g, '');
+    if (!text || text === '-') return;
+    const done = () => {
+      el.classList.add('copied');
+      setTimeout(() => el.classList.remove('copied'), 700);
+    };
+    try {
+      navigator.clipboard?.writeText(text).then(done, done);
+    } catch { done(); }
   }
 
   // 탭 클릭 시 초기화
@@ -386,15 +448,21 @@
   function mapNaverRows(start, end) {
     const out = [];
     for (const r of (window.naverAllRows || [])) {
-      if (!NAVER_RE.test(r.media || '')) continue;
+      const media = r.media || '';
+      // 영문 'cafe' 우선(DA), 없으면 한글 '카페'(SA). 둘 다 없으면 스킵.
+      let platform = null;
+      if (NAVER_DA_RE.test(media))      platform = 'naverDA';
+      else if (NAVER_SA_RE.test(media)) platform = 'naverSA';
+      else continue;
       if (r.date < start || r.date > end) continue;
       out.push({
-        platform: 'naver',
-        unit: r.media,
+        platform,
+        unit: media,
         date: r.date,
+        request:    Number(r.request    || 0),
         impression: Number(r.impression || 0),
-        click: Number(r.click || 0),
-        profit: Number(r.profit || 0),
+        click:      Number(r.click      || 0),
+        profit:     Number(r.profit     || 0),
       });
     }
     return out;
@@ -420,6 +488,7 @@
     const force = opts.force === true;
     const { start, end } = getDateRange();
     if (!start || !end) { alert('시작일/종료일을 선택하세요.'); return; }
+    cmpCurrentRange = { start, end };   // 일평균 계산용
 
     const errorEl   = document.getElementById('cmp-error-msg');
     const loadingEl = document.getElementById('cmp-loading');
@@ -564,11 +633,11 @@
       return;
     }
     // MCS 옵션 채우기
-    const uniqUnits = platform =>
-      [...new Set(cmpRawRows.filter(r => r.platform === platform).map(r => r.unit))].sort();
-    mcsK.refresh(uniqUnits('kakao'));
-    mcsG.refresh(uniqUnits('google'));
-    mcsN.refresh(uniqUnits('naver'));
+    const uniqUnits = pred =>
+      [...new Set(cmpRawRows.filter(pred).map(r => r.unit))].sort();
+    mcsK.refresh(uniqUnits(r => r.platform === 'kakao'));
+    mcsG.refresh(uniqUnits(r => r.platform === 'google'));
+    mcsN.refresh(uniqUnits(r => r.platform === 'naverSA' || r.platform === 'naverDA'));
 
     renderAll();
     ['cmp-summary', 'cmp-charts', 'cmp-table-section'].forEach(id =>
@@ -583,9 +652,10 @@
     const selG = mcsG ? new Set(mcsG.getSelected()) : new Set();
     const selN = mcsN ? new Set(mcsN.getSelected()) : new Set();
     return rows.filter(r => {
-      if (r.platform === 'kakao')  return selK.size === 0 || selK.has(r.unit);
-      if (r.platform === 'google') return selG.size === 0 || selG.has(r.unit);
-      if (r.platform === 'naver')  return selN.size === 0 || selN.has(r.unit);
+      if (r.platform === 'kakao')   return selK.size === 0 || selK.has(r.unit);
+      if (r.platform === 'google')  return selG.size === 0 || selG.has(r.unit);
+      if (r.platform === 'naverSA' || r.platform === 'naverDA')
+        return selN.size === 0 || selN.has(r.unit);
       return true;
     });
   }
@@ -620,46 +690,82 @@
     return krw(Math.round(profit / base * 1000));
   }
 
+  // 선택 기간의 일수 (일평균 계산용). 일/주/월 모두 일 단위로 환산.
+  function getDayCount() {
+    const { start, end } = cmpCurrentRange;
+    if (!start || !end) return 1;
+    const s = new Date(start), e = new Date(end);
+    if (isNaN(s) || isNaN(e)) return 1;
+    return Math.max(1, Math.round((e - s) / 86400000) + 1);
+  }
+
   function renderSummary(rows) {
-    const aK = aggBy(rows, 'kakao');
-    const aG = aggBy(rows, 'google');
-    const aN = aggBy(rows, 'naver');
+    const aK  = aggBy(rows, 'kakao');
+    const aG  = aggBy(rows, 'google');
+    const aSA = aggBy(rows, 'naverSA');
+    const aDA = aggBy(rows, 'naverDA');
     const aT = {
-      profit:     aK.profit + aG.profit + aN.profit,
-      request:    aK.request + aG.request + aN.request,
-      impression: aK.impression + aG.impression + aN.impression,
-      click:      aK.click + aG.click + aN.click,
+      profit:     aK.profit     + aG.profit     + aSA.profit     + aDA.profit,
+      request:    aK.request    + aG.request    + aSA.request    + aDA.request,
+      impression: aK.impression + aG.impression + aSA.impression + aDA.impression,
+      click:      aK.click      + aG.click      + aSA.click      + aDA.click,
     };
-    const total = aT.profit;
-    const share = v => total > 0 ? pct(v / total * 100) : '-';
+    const totalProfit = aT.profit;
+    const share = v => totalProfit > 0 ? pct(v / totalProfit * 100) : '-';
+    const days = getDayCount();
 
-    const setText = (id, val) => {
-      const el = document.getElementById(id); if (el) el.textContent = val;
+    const setText = (id, val, rawNum) => {
+      const el = document.getElementById(id); if (!el) return;
+      el.textContent = val;
+      if (rawNum !== undefined) el.dataset.raw = String(rawNum);
     };
 
-    // 수익 + 점유율
-    setText('cmp-kakao-profit',  krw(aK.profit));
-    setText('cmp-google-profit', krw(aG.profit));
-    setText('cmp-naver-profit',  krw(aN.profit));
-    setText('cmp-total-profit',  krw(aT.profit));
+    // 카드별 일평균 토글 상태 조회
+    const isAvg = card => {
+      const el = document.querySelector(`.cmp-card[data-card="${card}"]`);
+      return el ? el.dataset.avg === '1' : false;
+    };
+
+    // 카드 하나 채우기 — daily-avg이면 profit/req/imp를 days로 나눔. eCPM은 비율이라 동일.
+    function fill(prefix, a) {
+      const avg = isAvg(prefix);
+      const P = avg ? a.profit     / days : a.profit;
+      const R = avg ? a.request    / days : a.request;
+      const I = avg ? a.impression / days : a.impression;
+      setText(`cmp-${prefix}-profit`,   krw(P),                      Math.round(P));
+      setText(`cmp-${prefix}-req`,      R ? num(Math.round(R)) : '-', R ? Math.round(R) : 0);
+      setText(`cmp-${prefix}-imp`,      I ? num(Math.round(I)) : '-', I ? Math.round(I) : 0);
+      setText(`cmp-${prefix}-req-ecpm`, ecpm(a.profit, a.request),    ecpmRaw(a.profit, a.request));
+      setText(`cmp-${prefix}-imp-ecpm`, ecpm(a.profit, a.impression), ecpmRaw(a.profit, a.impression));
+    }
+    fill('kakao',   aK);
+    fill('google',  aG);
+    fill('naverSA', aSA);
+    fill('naverDA', aDA);
+    fill('total',   aT);
+
+    // 점유율 / 유닛 개수 — 일평균과 무관
     setText('cmp-kakao-share',   `점유율 ${share(aK.profit)}`);
     setText('cmp-google-share',  `점유율 ${share(aG.profit)}`);
-    setText('cmp-naver-share',   `점유율 ${share(aN.profit)}`);
-    const uniqUnits = new Set(rows.map(r => `${r.platform}:${r.unit}`)).size;
-    setText('cmp-total-sub',     `${uniqUnits}개 유닛`);
-
-    // 요청 / 노출 / eCPM
-    const fill = (prefix, a) => {
-      setText(`cmp-${prefix}-req`,      a.request    ? num(a.request)    : '-');
-      setText(`cmp-${prefix}-imp`,      a.impression ? num(a.impression) : '-');
-      setText(`cmp-${prefix}-req-ecpm`, ecpm(a.profit, a.request));
-      setText(`cmp-${prefix}-imp-ecpm`, ecpm(a.profit, a.impression));
-    };
-    fill('kakao',  aK);
-    fill('google', aG);
-    fill('naver',  aN);
-    fill('total',  aT);
+    setText('cmp-naverSA-share', `점유율 ${share(aSA.profit)}`);
+    setText('cmp-naverDA-share', `점유율 ${share(aDA.profit)}`);
+    const uniqUnitsCount = new Set(rows.map(r => `${r.platform}:${r.unit}`)).size;
+    setText('cmp-total-sub', `${uniqUnitsCount}개 유닛 · ${days}일`);
   }
+
+  function ecpmRaw(profit, base) {
+    if (!base || base <= 0) return 0;
+    return Math.round(profit / base * 1000);
+  }
+
+  // 차트 지표 메타 (라벨/포맷/ecpm 여부)
+  const CHART_METRIC_META = {
+    profit:     { label: '수익',       short: '수익',       fmt: v => krw(v),                                isEcpm: false },
+    request:    { label: '요청',       short: '요청',       fmt: v => num(Math.round(v)),                   isEcpm: false },
+    impression: { label: '노출',       short: '노출',       fmt: v => num(Math.round(v)),                   isEcpm: false },
+    reqEcpm:    { label: '요청 eCPM',  short: '요청 eCPM',  fmt: v => krw(Math.round(v)),                   isEcpm: true, base: 'request' },
+    impEcpm:    { label: '노출 eCPM',  short: '노출 eCPM',  fmt: v => krw(Math.round(v)),                   isEcpm: true, base: 'impression' },
+  };
 
   function renderTrendChart(rows) {
     // 기간별 그룹 키 (일/주/월)
@@ -675,45 +781,67 @@
       return date;
     };
 
-    const buckets = { kakao: {}, google: {}, naver: {} };
+    // 플랫폼×버킷별 누적합 (profit/request/impression 모두)
+    const buckets = {};
+    PLATFORMS.forEach(p => { buckets[p.key] = {}; });
     for (const r of rows) {
       const k = toKey(r.date);
-      buckets[r.platform][k] = (buckets[r.platform][k] || 0) + r.profit;
+      const b = buckets[r.platform]; if (!b) continue;
+      const g = b[k] || { profit: 0, request: 0, impression: 0 };
+      g.profit     += r.profit     || 0;
+      g.request    += r.request    || 0;
+      g.impression += r.impression || 0;
+      b[k] = g;
     }
     const allKeys = [...new Set(rows.map(r => toKey(r.date)))].sort();
 
-    const series = [
-      { key: 'kakao',  label: '🟡 다음(카카오)', color: '#FBB034' },
-      { key: 'google', label: '🔵 구글',         color: '#1A73E8' },
-      { key: 'naver',  label: '🟢 네이버',       color: '#03C75A' },
-    ].map(s => ({
-      label: s.label,
-      data: allKeys.map(k => buckets[s.key][k] || 0),
-      borderColor: s.color,
-      backgroundColor: s.color + '22',
+    const meta = CHART_METRIC_META[cmpChartMetric] || CHART_METRIC_META.profit;
+    const valueAt = (platformKey, k) => {
+      const g = buckets[platformKey][k];
+      if (!g) return 0;
+      if (meta.isEcpm) {
+        const base = g[meta.base];
+        return base > 0 ? g.profit / base * 1000 : 0;
+      }
+      return g[cmpChartMetric] || 0;
+    };
+
+    const series = PLATFORMS.map(p => ({
+      label: p.label,
+      data: allKeys.map(k => valueAt(p.key, k)),
+      borderColor: p.color,
+      backgroundColor: p.color + '22',
       tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2,
     }));
 
-    // 전체 합계 라인 (세 플랫폼 합) — 은은한 슬레이트 톤 solid 라인
-    const totalData = allKeys.map(k =>
-      (buckets.kakao[k] || 0) + (buckets.google[k] || 0) + (buckets.naver[k] || 0)
-    );
+    // 전체 합계 라인 — 지표에 따라 합산 or eCPM 재계산
+    const totalData = allKeys.map(k => {
+      if (meta.isEcpm) {
+        let profit = 0, base = 0;
+        PLATFORMS.forEach(p => {
+          const g = buckets[p.key][k]; if (!g) return;
+          profit += g.profit; base += g[meta.base];
+        });
+        return base > 0 ? profit / base * 1000 : 0;
+      }
+      return PLATFORMS.reduce((sum, p) => sum + valueAt(p.key, k), 0);
+    });
     series.push({
       label: '전체 합계',
       data: totalData,
-      borderColor: '#64748B',        // slate-500, 차분한 회색
+      borderColor: '#64748B',
       backgroundColor: 'transparent',
-      tension: 0.35,
-      fill: false,
-      pointRadius: 0,                // 기본 상태에선 점 없음 → 깔끔
-      pointHoverRadius: 5,           // 호버 시에만 노출
+      tension: 0.35, fill: false,
+      pointRadius: 0, pointHoverRadius: 5,
       pointBackgroundColor: '#64748B',
-      borderWidth: 2,
-      order: 0,                      // 다른 라인 위에 깔끔히 표시
+      borderWidth: 2, order: 0,
     });
 
+    // 차트 제목 라벨 업데이트
+    const labelEl = document.getElementById('cmp-chart-metric-label');
+    if (labelEl) labelEl.textContent = meta.short;
+
     if (cmpTrendChart) cmpTrendChart.destroy();
-    // 호버된 X축 인덱스 (포인트 위에 마우스 올리면 해당 날짜 라벨 강조)
     let hoveredIdx = null;
     cmpTrendChart = new Chart(document.getElementById('cmp-trend-chart'), {
       type: 'line',
@@ -723,14 +851,11 @@
         interaction: { mode: 'index', intersect: false },
         onHover: (event, elements, chart) => {
           const newIdx = elements.length > 0 ? elements[0].index : null;
-          if (newIdx !== hoveredIdx) {
-            hoveredIdx = newIdx;
-            chart.update('none'); // 애니메이션 없이 라벨 색상만 갱신
-          }
+          if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; chart.update('none'); }
         },
         plugins: {
           legend: { position: 'top' },
-          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${krw(c.parsed.y)}` } },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${meta.fmt(c.parsed.y)}` } },
         },
         scales: {
           x: {
@@ -741,26 +866,24 @@
                 : { weight: 'normal', size: 12 },
             },
           },
-          y: { beginAtZero: true, ticks: { callback: v => krw(v) } },
+          y: { beginAtZero: true, ticks: { callback: v => meta.fmt(v) } },
         },
       },
     });
   }
 
   function renderPieChart(rows) {
-    const k = aggBy(rows, 'kakao').profit;
-    const g = aggBy(rows, 'google').profit;
-    const n = aggBy(rows, 'naver').profit;
-    const total = k + g + n;
+    const values = PLATFORMS.map(p => aggBy(rows, p.key).profit);
+    const total = values.reduce((a, b) => a + b, 0);
 
     if (cmpPieChart) cmpPieChart.destroy();
     cmpPieChart = new Chart(document.getElementById('cmp-pie-chart'), {
       type: 'doughnut',
       data: {
-        labels: ['🟡 카카오', '🔵 구글', '🟢 네이버'],
+        labels: PLATFORMS.map(p => p.label),
         datasets: [{
-          data: [k, g, n],
-          backgroundColor: ['#FBB034', '#1A73E8', '#03C75A'],
+          data: values,
+          backgroundColor: PLATFORMS.map(p => p.color),
           borderWidth: 2, borderColor: '#fff',
         }],
       },
@@ -804,10 +927,11 @@
     });
 
     const badge = p => ({
-      kakao:  `<span class="cmp-badge cmp-badge-kakao">🟡 카카오</span>`,
-      google: `<span class="cmp-badge cmp-badge-google">🔵 구글</span>`,
-      naver:  `<span class="cmp-badge cmp-badge-naver">🟢 네이버</span>`,
-    }[p]);
+      kakao:   `<span class="cmp-badge cmp-badge-kakao">🟡 카카오</span>`,
+      google:  `<span class="cmp-badge cmp-badge-google">🔵 구글</span>`,
+      naverSA: `<span class="cmp-badge cmp-badge-naver-sa">🟢 네이버 SA</span>`,
+      naverDA: `<span class="cmp-badge cmp-badge-naver-da">🟩 네이버 DA</span>`,
+    }[p] || p);
 
     document.getElementById('cmp-table-body').innerHTML = arr.map(r => `
       <tr class="cmp-row-${r.platform}">
@@ -828,7 +952,7 @@
   function downloadCsv() {
     const rows = applyUnitFilter(cmpRawRows);
     if (!rows.length) return;
-    const platMap = { kakao: '카카오', google: '구글', naver: '네이버' };
+    const platMap = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
     const header = ['플랫폼','유닛명','날짜','노출수','클릭수','수익(원)'];
     const lines = [header.join(',')];
     for (const r of rows) {
