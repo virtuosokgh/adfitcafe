@@ -891,10 +891,10 @@ tbody td:nth-child(3) { text-align: left; }
    📊 통합 비교 대시보드
    ========================================= */
 
-/* 통합 비교 탭 버튼 하이라이트 */
+/* 통합 비교 탭 버튼 하이라이트
+   - 비활성: 일반 톤(다른 버튼과 동일) + 살짝 굵은 폰트로 살짝 강조
+   - 활성: 3색 그라디언트 + 그림자 */
 .pnav-btn.pnav-compare {
-  background: linear-gradient(135deg, #FBB034 0%, #1A73E8 50%, #03C75A 100%);
-  color: #fff;
   font-weight: 700;
 }
 .pnav-btn.pnav-compare.active {

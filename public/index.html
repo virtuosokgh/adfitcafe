@@ -13,14 +13,14 @@
 
     <!-- ▶ 최상단 플랫폼 네비게이션 -->
     <div class="platform-nav">
-      <button class="pnav-btn pnav-compare" data-pnav="compare">📊 통합 비교</button>
-      <button class="pnav-btn active" data-pnav="adfit">🟡 카카오 애드핏</button>
+      <button class="pnav-btn pnav-compare active" data-pnav="compare">📊 통합 비교</button>
+      <button class="pnav-btn" data-pnav="adfit">🟡 카카오 애드핏</button>
       <button class="pnav-btn" data-pnav="naver">🟢 네이버</button>
       <button class="pnav-btn" data-pnav="google">🔵 구글 애드매니저</button>
     </div>
 
     <!-- ========== 카카오 애드핏 섹션 ========== -->
-    <div id="adfit-section">
+    <div id="adfit-section" class="hidden">
       <header>
         <h1><span class="title-by">비투스가 만든</span> 카페 애드핏 수익 대시보드</h1>
         <p class="subtitle">광고 단위명에 <strong>카페</strong> 또는 <strong>테이블</strong>이 포함된 수익만 표시합니다.</p>
@@ -471,8 +471,8 @@
       </div>
     </div><!-- /google-section -->
 
-    <!-- ========== 통합 비교 섹션 ========== -->
-    <div id="compare-section" class="hidden">
+    <!-- ========== 통합 비교 섹션 (디폴트 표시) ========== -->
+    <div id="compare-section">
       <header>
         <h1><span class="title-by">비투스가 만든</span> 카페 수익 통합 비교 대시보드</h1>
         <p class="subtitle">🟡 다음(카카오) / 🔵 구글 / 🟢 네이버 의 <strong>카페 수익</strong>을 한 화면에서 비교합니다.</p>

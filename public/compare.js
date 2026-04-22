@@ -126,8 +126,12 @@
     const btn = e.target.closest('.pnav-btn[data-pnav="compare"]');
     if (btn) initOnce();
   });
-  // 처음부터 compare가 활성이었으면
-  if (localStorage.getItem('pnav_active') === 'compare') {
+  // 통합 비교가 디폴트(HTML에 active 클래스) 또는 localStorage 에 저장된 상태면 자동 초기화
+  const compareBtn = document.querySelector('.pnav-btn[data-pnav="compare"]');
+  const shouldAutoInit =
+    (compareBtn && compareBtn.classList.contains('active')) ||
+    localStorage.getItem('pnav_active') === 'compare';
+  if (shouldAutoInit) {
     if (document.readyState === 'loading')
       document.addEventListener('DOMContentLoaded', initOnce);
     else
