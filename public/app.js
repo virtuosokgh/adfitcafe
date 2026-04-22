@@ -724,10 +724,6 @@ function renderChart(rowsA, rowsB = []) {
               ? { weight: 'bold', size: 13 }
               : { weight: 'normal', size: 12 },
           },
-          grid: {
-            color: (c) => c.index === hoveredIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
-            lineWidth: (c) => c.index === hoveredIdx ? 2 : 1,
-          },
         },
         y: { ticks: { callback: yTickFmt } },
       },

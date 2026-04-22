@@ -523,10 +523,6 @@ function renderNaverChart(rowsA, rowsB = []) {
             color: (c) => c.index === naverHoveredIdx ? '#DC2626' : '#6B7280',
             font: (c) => c.index === naverHoveredIdx ? { weight: 'bold', size: 13 } : { weight: 'normal', size: 12 },
           },
-          grid: {
-            color: (c) => c.index === naverHoveredIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
-            lineWidth: (c) => c.index === naverHoveredIdx ? 2 : 1,
-          },
         },
         y: { ticks: { callback: yTickFmt } },
       },

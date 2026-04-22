@@ -738,10 +738,6 @@
                 ? { weight: 'bold', size: 13 }
                 : { weight: 'normal', size: 12 },
             },
-            grid: {
-              color: (ctx) => ctx.index === hoveredIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
-              lineWidth: (ctx) => ctx.index === hoveredIdx ? 2 : 1,
-            },
           },
           y: { beginAtZero: true, ticks: { callback: v => krw(v) } },
         },
