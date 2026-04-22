@@ -13,8 +13,10 @@
 
     <!-- ▶ 최상단 플랫폼 네비게이션 -->
     <div class="platform-nav">
+      <button class="pnav-btn pnav-compare" data-pnav="compare">📊 통합 비교</button>
       <button class="pnav-btn active" data-pnav="adfit">🟡 카카오 애드핏</button>
       <button class="pnav-btn" data-pnav="naver">🟢 네이버</button>
+      <button class="pnav-btn" data-pnav="google">🔵 구글 애드매니저</button>
     </div>
 
     <!-- ========== 카카오 애드핏 섹션 ========== -->
@@ -170,6 +172,8 @@
                 <th data-col="impRate">노출율<span class="sort-icon">↕</span></th>
                 <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
                 <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
+                <th data-col="impRpm">노출 eCPM<span class="sort-icon">↕</span></th>
+                <th data-col="reqRpm">요청 eCPM<span class="sort-icon">↕</span></th>
                 <th data-col="profit">수익 (적립금)<span class="sort-icon">↕</span></th>
                 <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
               </tr>
@@ -340,6 +344,281 @@
       </div>
     </div><!-- /naver-section -->
 
+    <!-- ========== 구글 애드매니저 섹션 ========== -->
+    <div id="google-section" class="hidden">
+      <header>
+        <h1><span class="title-by">비투스가 만든</span> 카페 구글 애드매니저 대시보드</h1>
+        <p class="subtitle">Google Ad Manager API 실시간 연동 (Network: <strong>113951510</strong>)</p>
+      </header>
+
+      <!-- 기간 탭 -->
+      <div class="period-tabs" id="google-period-tabs">
+        <button class="tab-btn active" data-google-period="daily">일별</button>
+        <button class="tab-btn" data-google-period="weekly">주별</button>
+        <button class="tab-btn" data-google-period="monthly">월별</button>
+      </div>
+
+      <!-- 날짜 + 필터 -->
+      <div class="controls" id="google-controls">
+        <div class="date-range" id="google-date-range-daily">
+          <label>시작일 <input type="text" id="google-start-d" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료일 <input type="text" id="google-end-d" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <div class="date-range hidden" id="google-date-range-weekly">
+          <label>시작 주 <input type="text" id="google-start-w" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 주 <input type="text" id="google-end-w" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <div class="date-range hidden" id="google-date-range-monthly">
+          <label>시작 월 <input type="text" id="google-start-m" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 월 <input type="text" id="google-end-m" placeholder="날짜 선택" readonly /></label>
+        </div>
+
+        <div class="filter-row">
+          <div class="filter-area">
+            <label>광고단위명</label>
+            <div id="mcs-google-adunit"></div>
+          </div>
+          <button type="button" id="google-search-btn" class="search-btn">조회</button>
+        </div>
+
+        <!-- 비교 필터 -->
+        <div class="compare-filter-row" id="google-compare-filter-row">
+          <div class="filter-row compare-date-row">
+            <div class="date-range">
+              <label>비교 시작일 <input type="text" id="google-cmp-start-d" placeholder="날짜 선택" readonly /></label>
+              <span class="dash">~</span>
+              <label>비교 종료일 <input type="text" id="google-cmp-end-d" placeholder="날짜 선택" readonly /></label>
+            </div>
+            <button type="button" id="google-cmp-date-clear" class="cmp-clear-btn">비교 기간 초기화</button>
+          </div>
+          <div class="filter-row">
+            <div class="filter-area">
+              <label>광고단위명 비교</label>
+              <div id="mcs-google-cmp-adunit"></div>
+            </div>
+            <div class="filter-placeholder"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 로딩 / 오류 -->
+      <div id="google-loading" class="loading hidden">
+        <div class="spinner"></div>
+        <span>구글 애드매니저 데이터를 불러오는 중... (최대 30초)</span>
+      </div>
+      <div id="google-error-msg" class="error-msg hidden"></div>
+      <div id="google-empty-msg" class="empty-msg hidden">해당 기간 데이터가 없습니다.</div>
+
+      <!-- 요약 카드 -->
+      <div class="summary-cards" id="google-summary-cards" style="display:none;">
+        <div class="card total chart-active" data-metric="profit">
+          <div class="card-label">총 수익</div>
+          <div class="card-value" id="google-total-profit">0원</div>
+        </div>
+        <div class="card" data-metric="impression">
+          <div class="card-label">총 노출수</div>
+          <div class="card-value" id="google-total-impression">0</div>
+        </div>
+        <div class="card" data-metric="click">
+          <div class="card-label">총 클릭수</div>
+          <div class="card-value" id="google-total-click">0</div>
+        </div>
+        <div class="card" data-metric="ctr">
+          <div class="card-label">CTR</div>
+          <div class="card-value" id="google-total-ctr">0%</div>
+        </div>
+        <div class="card" data-metric="ecpm">
+          <div class="card-label">eCPM</div>
+          <div class="card-value" id="google-total-ecpm">0원</div>
+        </div>
+      </div>
+
+      <!-- 차트 -->
+      <div class="chart-section" id="google-chart-section" style="display:none;">
+        <h2 id="google-chart-title-h2">날짜별 수익 추이</h2>
+        <canvas id="google-profit-chart"></canvas>
+      </div>
+
+      <!-- 상세 테이블 -->
+      <div class="table-section" id="google-table-section" style="display:none;">
+        <div class="table-header-row">
+          <h2>광고단위별 상세</h2>
+          <div class="table-header-right">
+            <span id="google-row-count"></span>
+            <button id="google-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="google-result-table">
+            <thead>
+              <tr>
+                <th data-col="date">날짜<span class="sort-icon">↕</span></th>
+                <th data-col="adUnit">광고단위명<span class="sort-icon">↕</span></th>
+                <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
+                <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
+                <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
+                <th data-col="ecpm">eCPM<span class="sort-icon">↕</span></th>
+                <th data-col="profit">수익<span class="sort-icon">↕</span></th>
+                <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="google-result-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /google-section -->
+
+    <!-- ========== 통합 비교 섹션 ========== -->
+    <div id="compare-section" class="hidden">
+      <header>
+        <h1><span class="title-by">비투스가 만든</span> 카페 수익 통합 비교 대시보드</h1>
+        <p class="subtitle">🟡 다음(카카오) / 🔵 구글 / 🟢 네이버 의 <strong>카페 수익</strong>을 한 화면에서 비교합니다.</p>
+      </header>
+
+      <!-- 기간 탭 -->
+      <div class="period-tabs" id="cmp-period-tabs">
+        <button class="tab-btn active" data-cmp-period="daily">일별</button>
+        <button class="tab-btn" data-cmp-period="weekly">주별</button>
+        <button class="tab-btn" data-cmp-period="monthly">월별</button>
+      </div>
+
+      <div class="controls">
+        <!-- 날짜 범위 (기간별) -->
+        <div class="date-range" id="cmp-date-range-daily">
+          <label>시작일 <input type="text" id="cmp-start-d" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료일 <input type="text" id="cmp-end-d" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <div class="date-range hidden" id="cmp-date-range-weekly">
+          <label>시작 주 <input type="text" id="cmp-start-w" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 주 <input type="text" id="cmp-end-w" placeholder="날짜 선택" readonly /></label>
+        </div>
+        <div class="date-range hidden" id="cmp-date-range-monthly">
+          <label>시작 월 <input type="text" id="cmp-start-m" placeholder="날짜 선택" readonly /></label>
+          <span class="dash">~</span>
+          <label>종료 월 <input type="text" id="cmp-end-m" placeholder="날짜 선택" readonly /></label>
+        </div>
+
+        <!-- 네이버 CSV 컴팩트 업로드 -->
+        <div class="cmp-naver-upload-compact">
+          <span class="cmp-naver-label">🟢 네이버 CSV</span>
+          <input type="file" id="cmp-naver-csv" accept=".csv" style="display:none" />
+          <button type="button" id="cmp-naver-upload-btn" class="cmp-naver-upload-btn">파일 선택</button>
+          <span class="cmp-naver-status" id="cmp-naver-status">업로드 없음 → 카카오+구글만 비교됩니다</span>
+          <button type="button" id="cmp-naver-reset-btn" class="cmp-naver-reset-btn hidden">✕ 해제</button>
+        </div>
+
+        <!-- 플랫폼별 유닛 필터 -->
+        <div class="filter-row">
+          <div class="filter-area">
+            <label>🟡 카카오 유닛</label>
+            <div id="cmp-mcs-kakao"></div>
+          </div>
+          <div class="filter-area">
+            <label>🔵 구글 유닛</label>
+            <div id="cmp-mcs-google"></div>
+          </div>
+          <div class="filter-area">
+            <label>🟢 네이버 유닛</label>
+            <div id="cmp-mcs-naver"></div>
+          </div>
+          <button id="cmp-search-btn" class="search-btn">통합 조회</button>
+        </div>
+      </div>
+
+      <!-- 로딩 (귀여운 3-플랫폼 마스코트) -->
+      <div id="cmp-loading" class="cmp-cute-loading hidden">
+        <div class="cute-stage">
+          <div class="cute-char cute-kakao" data-plat="kakao">
+            <div class="cute-emoji">🟡</div>
+            <div class="cute-label">카카오</div>
+            <div class="cute-status">대기 중</div>
+          </div>
+          <div class="cute-char cute-google" data-plat="google">
+            <div class="cute-emoji">🔵</div>
+            <div class="cute-label">구글</div>
+            <div class="cute-status">대기 중</div>
+          </div>
+          <div class="cute-char cute-naver" data-plat="naver">
+            <div class="cute-emoji">🟢</div>
+            <div class="cute-label">네이버</div>
+            <div class="cute-status">대기 중</div>
+          </div>
+        </div>
+        <div class="cute-msg" id="cmp-loading-msg">데이터를 모으는 중이에요...</div>
+        <div class="cute-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div id="cmp-error-msg" class="error-msg hidden"></div>
+
+      <!-- 플랫폼별 수익 카드 -->
+      <div class="summary-cards cmp-platform-cards" id="cmp-summary" style="display:none;">
+        <div class="card cmp-card cmp-card-kakao">
+          <div class="card-label">🟡 다음(카카오)</div>
+          <div class="card-value" id="cmp-kakao-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-kakao-share">-</div>
+        </div>
+        <div class="card cmp-card cmp-card-google">
+          <div class="card-label">🔵 구글 애드매니저</div>
+          <div class="card-value" id="cmp-google-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-google-share">-</div>
+        </div>
+        <div class="card cmp-card cmp-card-naver">
+          <div class="card-label">🟢 네이버</div>
+          <div class="card-value" id="cmp-naver-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-naver-share">-</div>
+        </div>
+        <div class="card total cmp-card cmp-card-total">
+          <div class="card-label">📊 전체 합계</div>
+          <div class="card-value" id="cmp-total-profit">-</div>
+          <div class="cmp-card-sub" id="cmp-total-sub">-</div>
+        </div>
+      </div>
+
+      <!-- 차트 (일자별 추이 + 점유율) -->
+      <div class="cmp-charts-grid" id="cmp-charts" style="display:none;">
+        <div class="chart-section cmp-chart-trend">
+          <h2>일자별 수익 추이</h2>
+          <canvas id="cmp-trend-chart"></canvas>
+        </div>
+        <div class="chart-section cmp-chart-pie">
+          <h2>플랫폼 점유율</h2>
+          <canvas id="cmp-pie-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- 유닛별 상세 테이블 -->
+      <div class="table-section" id="cmp-table-section" style="display:none;">
+        <div class="table-header-row">
+          <h2>유닛별 상세 (플랫폼 통합)</h2>
+          <div class="table-header-right">
+            <span id="cmp-row-count"></span>
+            <button id="cmp-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="cmp-table">
+            <thead>
+              <tr>
+                <th data-col="platform">플랫폼<span class="sort-icon">↕</span></th>
+                <th data-col="unit">유닛명<span class="sort-icon">↕</span></th>
+                <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
+                <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
+                <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
+                <th data-col="ecpm">eCPM<span class="sort-icon">↕</span></th>
+                <th data-col="profit">수익<span class="sort-icon">↕</span></th>
+                <th data-col="share">점유율<span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="cmp-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /compare-section -->
+
   </div><!-- /container -->
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -347,5 +626,7 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
   <script src="app.js"></script>
   <script src="naver.js"></script>
+  <script src="google.js"></script>
+  <script src="compare.js"></script>
 </body>
 </html>

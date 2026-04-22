@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(pkill -f \"node server.js\")",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(/opt/homebrew/bin/npm install *)"
     ]
   }
 }

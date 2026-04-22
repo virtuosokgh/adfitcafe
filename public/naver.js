@@ -58,13 +58,18 @@ function switchPNav(target) {
   pnavBtns.forEach(b => b.classList.toggle('active', b.dataset.pnav === target));
   adfitSection.classList.toggle('hidden', target !== 'adfit');
   naverSection.classList.toggle('hidden', target !== 'naver');
+  const googleSection = document.getElementById('google-section');
+  if (googleSection) googleSection.classList.toggle('hidden', target !== 'google');
+  const compareSection = document.getElementById('compare-section');
+  if (compareSection) compareSection.classList.toggle('hidden', target !== 'compare');
   localStorage.setItem(PNAV_KEY, target);
 }
 
 pnavBtns.forEach(btn => btn.addEventListener('click', () => switchPNav(btn.dataset.pnav)));
 
 (function () {
-  if (localStorage.getItem(PNAV_KEY) === 'naver') switchPNav('naver');
+  const saved = localStorage.getItem(PNAV_KEY);
+  if (['naver', 'google', 'compare'].includes(saved)) switchPNav(saved);
 })();
 
 // ── 기간 탭 전환 ──────────────────────────
@@ -820,6 +825,7 @@ function handleNaverFile(file) {
       return;
     }
     naverAllRows = rows;
+    window.naverAllRows = rows;  // compare.js에서 접근
     // 캐시 저장 (다음 접속 시 자동 복원용)
     try {
       localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
@@ -920,6 +926,7 @@ function loadNaverFromCache() {
     const { fileName, uploadedAt, rows } = JSON.parse(raw);
     if (!rows || rows.length === 0) return;
     naverAllRows = rows;
+    window.naverAllRows = rows;  // compare.js에서 접근
     const dateStr = new Date(uploadedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
     naverFileNameEl.textContent = `📄 ${fileName}  (${rows.length}건 · 저장됨 ${dateStr})`;
     naverUploadZone.classList.add('hidden');

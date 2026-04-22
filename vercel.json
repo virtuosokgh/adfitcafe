@@ -1,4 +1,9 @@
 {
   "outputDirectory": "public",
-  "installCommand": "npm install --omit=dev"
+  "installCommand": "npm install --omit=dev",
+  "functions": {
+    "api/google/report.js": {
+      "maxDuration": 60
+    }
+  }
 }

@@ -1,1 +1,5 @@
 server.js
+scripts/
+credentials/
+.env
+.env.local

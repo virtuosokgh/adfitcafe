@@ -474,6 +474,8 @@ function getSortValue(row, col) {
     case 'impRate':    return row.request    ? row.impression / row.request   : 0;
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.impression ? row.click / row.impression    : 0;
+    case 'impRpm':     return row.impression ? row.profit / row.impression * 1000 : 0;
+    case 'reqRpm':     return row.request    ? row.profit / row.request    * 1000 : 0;
     case 'profit':     return row.profit     || 0;
     case 'profitPct':  return row._profitPct || 0;
     default:           return '';
@@ -527,6 +529,8 @@ function renderTable(rowsA, rowsB = []) {
       <td>${r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%'}</td>
       <td>${comma(r.click)}</td>
       <td>${pct(r.click, r.impression)}</td>
+      <td>${r.impression ? rpmFmt(r.profit / r.impression * 1000) : '-'}</td>
+      <td>${r.request    ? rpmFmt(r.profit / r.request    * 1000) : '-'}</td>
       <td class="profit-cell"><span class="profit-cell-inner"><span>${won(r.profit)}</span>${copyBtn(r.profit || 0)}</span></td>
       <td>${distPct}</td>
     </tr>`;
@@ -562,7 +566,7 @@ function downloadCSV() {
     row('노출 RPM', impRpmVal),
     row('요청 RPM', reqRpmVal),
     '',
-    row('날짜', '광고단위 ID', '광고단위명', '요청수', '응답수', '노출수', '노출율(%)', '클릭수', 'CTR', '수익 (적립금)', '분포'),
+    row('날짜', '광고단위 ID', '광고단위명', '요청수', '응답수', '노출수', '노출율(%)', '클릭수', 'CTR', '노출eCPM(원)', '요청eCPM(원)', '수익 (적립금)', '분포'),
   ];
 
   displayRows.forEach(r => {
@@ -581,6 +585,8 @@ function downloadCSV() {
       r.request ? ((r.impression / r.request) * 100).toFixed(2) + '%' : '0.00%',
       r.click      || 0,
       pct(r.click, r.impression),
+      r.impression ? Math.round(r.profit / r.impression * 1000) : 0,
+      r.request    ? Math.round(r.profit / r.request    * 1000) : 0,
       r.profit     || 0,
       r._profitPct.toFixed(1) + '%'
     ));
