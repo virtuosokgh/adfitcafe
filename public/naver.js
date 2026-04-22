@@ -120,8 +120,10 @@ function parseNaverCSV(text) {
     const cells = naverParseCSVLine(lines[i]);
     const obj = {};
     headers.forEach((h, idx) => { obj[h] = (cells[idx] || '').trim(); });
-    // 매체에 '카페' / 'cafe' / 'Cafe' 가 포함된 행만 처리
-    if (!obj['매체'] || !/카페|cafe/i.test(obj['매체'])) continue;
+    // 광고ID 또는 매체에 '카페' / 'cafe' 가 포함된 행만 처리 (대소문자 무관)
+    const _adId  = obj['광고ID'] || '';
+    const _media = obj['매체']   || '';
+    if (!/카페|cafe/i.test(_adId + ' ' + _media)) continue;
     let date = obj['날짜'] || '';
     const isMonthly = date.endsWith('-00');
     if (isMonthly) date = date.slice(0, 7);

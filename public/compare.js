@@ -322,12 +322,14 @@
     for (let i = 1; i < lines.length; i++) {
       const c = splitCsv(lines[i]);
       const media = (c[iMedia] || '').trim();
-      if (!/카페|cafe/i.test(media)) continue;
+      const adId  = (c[iId]    || '').trim();
+      // 광고ID 또는 매체에 '카페' / 'cafe' 가 포함된 행 (대소문자 무관)
+      if (!/카페|cafe/i.test(adId + ' ' + media)) continue;
       let date = (c[iDate] || '').trim();
       const isMonthly = date.endsWith('-00');
       if (isMonthly) date = date.slice(0, 7);
       out.push({
-        date, isMonthly, adId: (c[iId] || '').trim(), media,
+        date, isMonthly, adId, media,
         request: pn(c[iReq]), impression: pn(c[iImp]),
         click: pn(c[iClk]), profit: pn(c[iPrf]), ctr: pn(c[iCtr]),
       });
@@ -467,15 +469,22 @@
     const out = [];
     for (const r of (window.naverAllRows || [])) {
       const media = r.media || '';
-      // 영문 'cafe' 우선(DA), 없으면 한글 '카페'(SA). 둘 다 없으면 스킵.
+      const adId  = r.adId  || '';
+      // 분류 규칙 (우선순위): 광고ID 먼저, 없으면 매체.
+      //   영문 'cafe' 포함 → naverDA
+      //   한글 '카페' 포함 → naverSA
       let platform = null;
-      if (NAVER_DA_RE.test(media))      platform = 'naverDA';
-      else if (NAVER_SA_RE.test(media)) platform = 'naverSA';
+      if (NAVER_DA_RE.test(adId))          platform = 'naverDA';
+      else if (NAVER_SA_RE.test(adId))     platform = 'naverSA';
+      else if (NAVER_DA_RE.test(media))    platform = 'naverDA';
+      else if (NAVER_SA_RE.test(media))    platform = 'naverSA';
       else continue;
       if (r.date < start || r.date > end) continue;
+      // 유닛 표시명: 광고ID 우선 (사용자가 SA/DA 구분에 쓰는 값), 없으면 매체
+      const unit = adId || media;
       out.push({
         platform,
-        unit: media,
+        unit,
         date: r.date,
         request:    Number(r.request    || 0),
         impression: Number(r.impression || 0),
