@@ -1126,6 +1126,11 @@ tbody td:nth-child(3) { text-align: left; }
 .cmp-badge-naver-sa { background: #D5F4E3; color: #016B30; }
 .cmp-badge-naver-da { background: #DCFCE7; color: #14532D; }
 
+/* 유닛별 상세 — 플랫폼 그룹 시작 행에 상단 구분선 (첫 행 제외) */
+#cmp-table-body tr.cmp-group-start:not(:first-child) > td {
+  border-top: 2px solid #E5E7EB;
+}
+
 /* 테이블 행 좌측 컬러 바 */
 #cmp-table tbody tr.cmp-row-kakao  { border-left: 3px solid #FBB034; }
 #cmp-table tbody tr.cmp-row-google { border-left: 3px solid #1A73E8; }

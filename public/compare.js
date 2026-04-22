@@ -18,7 +18,7 @@
   // 상태
   let cmpPeriod = 'daily';
   let cmpRawRows = [];         // 서버 응답 원본을 합친 것 (platform/unit/date/impression/click/profit)
-  let cmpSortState = { col: 'profit', dir: 'desc' };
+  let cmpSortState = { col: 'unit', dir: 'asc' };
   let cmpTrendChart = null;
   let cmpPieChart   = null;
   let cmpChartMetric = 'profit';   // profit | request | impression | reqEcpm | impEcpm
@@ -936,10 +936,15 @@
     const total = arr.reduce((a, r) => a + r.profit, 0);
     arr.forEach(r => r.share = total > 0 ? r.profit / total * 100 : 0);
 
-    // 정렬
+    // 정렬: 플랫폼 우선(네이버SA → 네이버DA → 구글 → 카카오), 내부는 선택된 컬럼(기본: 유닛명)
+    const PLATFORM_ORDER = { naverSA: 0, naverDA: 1, google: 2, kakao: 3 };
     const { col, dir } = cmpSortState;
     arr.sort((a, b) => {
-      const va = a[col], vb = b[col];
+      const po = (PLATFORM_ORDER[a.platform] ?? 99) - (PLATFORM_ORDER[b.platform] ?? 99);
+      if (po !== 0) return po;
+      // 같은 플랫폼 내: 현재 선택된 컬럼 기준, 디폴트는 유닛명 오름차순
+      const useCol = col || 'unit';
+      const va = a[useCol], vb = b[useCol];
       if (typeof va === 'string') return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       return dir === 'asc' ? va - vb : vb - va;
     });
@@ -951,8 +956,13 @@
       naverDA: `<span class="cmp-badge cmp-badge-naver-da">🟩 네이버 DA</span>`,
     }[p] || p);
 
-    document.getElementById('cmp-table-body').innerHTML = arr.map(r => `
-      <tr class="cmp-row-${r.platform}">
+    // 플랫폼 그룹 첫 행에 구분선 클래스 추가
+    let prevPlatform = null;
+    document.getElementById('cmp-table-body').innerHTML = arr.map(r => {
+      const isGroupStart = r.platform !== prevPlatform;
+      prevPlatform = r.platform;
+      return `
+      <tr class="cmp-row-${r.platform}${isGroupStart ? ' cmp-group-start' : ''}">
         <td>${badge(r.platform)}</td>
         <td>${r.unit}</td>
         <td>${num(r.impression)}</td>
@@ -961,8 +971,8 @@
         <td>${krw(r.ecpm)}</td>
         <td><strong>${krw(r.profit)}</strong></td>
         <td>${pct(r.share)}</td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
 
     document.getElementById('cmp-row-count').textContent = `${arr.length}개 유닛`;
   }
