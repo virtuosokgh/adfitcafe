@@ -711,16 +711,40 @@
     });
 
     if (cmpTrendChart) cmpTrendChart.destroy();
+    // 호버된 X축 인덱스 (포인트 위에 마우스 올리면 해당 날짜 라벨 강조)
+    let hoveredIdx = null;
     cmpTrendChart = new Chart(document.getElementById('cmp-trend-chart'), {
       type: 'line',
       data: { labels: allKeys, datasets: series },
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        onHover: (event, elements, chart) => {
+          const newIdx = elements.length > 0 ? elements[0].index : null;
+          if (newIdx !== hoveredIdx) {
+            hoveredIdx = newIdx;
+            chart.update('none'); // 애니메이션 없이 라벨 색상만 갱신
+          }
+        },
         plugins: {
           legend: { position: 'top' },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: ${krw(c.parsed.y)}` } },
         },
-        scales: { y: { beginAtZero: true, ticks: { callback: v => krw(v) } } },
+        scales: {
+          x: {
+            ticks: {
+              color: (ctx) => ctx.index === hoveredIdx ? '#DC2626' : '#6B7280',
+              font: (ctx) => ctx.index === hoveredIdx
+                ? { weight: 'bold', size: 13 }
+                : { weight: 'normal', size: 12 },
+            },
+            grid: {
+              color: (ctx) => ctx.index === hoveredIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
+              lineWidth: (ctx) => ctx.index === hoveredIdx ? 2 : 1,
+            },
+          },
+          y: { beginAtZero: true, ticks: { callback: v => krw(v) } },
+        },
       },
     });
   }

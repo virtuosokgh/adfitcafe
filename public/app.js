@@ -696,18 +696,41 @@ function renderChart(rowsA, rowsB = []) {
   }
 
   const ctx = document.getElementById('profit-chart').getContext('2d');
+  let hoveredIdx = null;
   chartInstance = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets },
     options: {
       responsive: true,
       animation: { duration: 400 },
+      interaction: { mode: 'index', intersect: false },
+      onHover: (event, elements, chart) => {
+        const newIdx = elements.length > 0 ? elements[0].index : null;
+        if (newIdx !== hoveredIdx) {
+          hoveredIdx = newIdx;
+          chart.update('none');
+        }
+      },
       plugins: {
         legend: { display: hasCmp },
         title: { display: true, text: chartTitle, font: { size: 13, weight: '600' }, color: '#6B7280', padding: { bottom: 8 } },
         tooltip: { callbacks: { label: tooltipFmt } }
       },
-      scales: { y: { ticks: { callback: yTickFmt } } }
+      scales: {
+        x: {
+          ticks: {
+            color: (c) => c.index === hoveredIdx ? '#DC2626' : '#6B7280',
+            font: (c) => c.index === hoveredIdx
+              ? { weight: 'bold', size: 13 }
+              : { weight: 'normal', size: 12 },
+          },
+          grid: {
+            color: (c) => c.index === hoveredIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
+            lineWidth: (c) => c.index === hoveredIdx ? 2 : 1,
+          },
+        },
+        y: { ticks: { callback: yTickFmt } },
+      },
     }
   });
 }

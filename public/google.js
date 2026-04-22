@@ -434,16 +434,37 @@ function renderGoogleChart(rowsA, rowsB) {
   });
 
   if (googleChart) googleChart.destroy();
+  let gHoverIdx = null;
   googleChart = new Chart(ctx, {
     type: 'line',
     data: { labels: allDates, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      onHover: (event, elements, chart) => {
+        const newIdx = elements.length > 0 ? elements[0].index : null;
+        if (newIdx !== gHoverIdx) {
+          gHoverIdx = newIdx;
+          chart.update('none');
+        }
+      },
       plugins: {
         legend: { position: 'top' },
         tooltip: { callbacks: { label: c => `${c.dataset.label}: ${gFmtNum(c.parsed.y, m)}` } },
       },
       scales: {
+        x: {
+          ticks: {
+            color: (c) => c.index === gHoverIdx ? '#DC2626' : '#6B7280',
+            font: (c) => c.index === gHoverIdx
+              ? { weight: 'bold', size: 13 }
+              : { weight: 'normal', size: 12 },
+          },
+          grid: {
+            color: (c) => c.index === gHoverIdx ? 'rgba(220, 38, 38, 0.25)' : 'rgba(0, 0, 0, 0.05)',
+            lineWidth: (c) => c.index === gHoverIdx ? 2 : 1,
+          },
+        },
         y: { beginAtZero: true, ticks: { callback: v => gFmtNum(v, m) } },
       },
     },
