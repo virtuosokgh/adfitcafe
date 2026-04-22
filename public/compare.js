@@ -750,9 +750,9 @@
   }
 
   function renderPieChart(rows) {
-    const k = sumBy(rows, 'kakao');
-    const g = sumBy(rows, 'google');
-    const n = sumBy(rows, 'naver');
+    const k = aggBy(rows, 'kakao').profit;
+    const g = aggBy(rows, 'google').profit;
+    const n = aggBy(rows, 'naver').profit;
     const total = k + g + n;
 
     if (cmpPieChart) cmpPieChart.destroy();
