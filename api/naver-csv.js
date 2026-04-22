@@ -2,7 +2,7 @@
  * 네이버 CSV 공유 저장소 API (Vercel Node.js Serverless)
  *
  *   POST   /api/naver-csv?fileName=... &uploader=...
- *     body: CSV 텍스트
+ *     body: CSV 텍스트 (Content-Type: text/csv)
  *     → Vercel Blob 에 저장 (고정 경로 `naver/latest.csv`)
  *     → 메타데이터(파일명·업로더·시각) 은 별도 JSON 으로 저장
  *
@@ -13,15 +13,11 @@
  *     → Blob + 메타 삭제
  *
  * ※ @vercel/blob 은 undici / node:stream 등 Node 전용 모듈을 사용하므로
- *    Edge Runtime 이 아닌 Node.js 서버리스 런타임에서 동작한다.
+ *    Edge Runtime 이 아닌 Node.js 서버리스 런타임(기본값) 에서 동작한다.
+ *    ※ Vercel 은 config.runtime 에 "edge" | "experimental-edge" | "nodejs" 만 허용.
+ *       버전 표기("nodejs20.x") 는 거부하므로 package.json engines 로 제어한다.
  */
 import { put, head, del } from '@vercel/blob';
-
-export const config = {
-  runtime: 'nodejs20.x',
-  // POST 본문(CSV)을 raw 문자열로 받기 위해 파서 비활성화
-  api: { bodyParser: false },
-};
 
 const CSV_KEY  = 'naver/latest.csv';
 const META_KEY = 'naver/latest.meta.json';
@@ -33,9 +29,20 @@ async function safeHead(pathname) {
   catch { return null; }
 }
 
-// raw request body 를 문자열로 읽기 (bodyParser: false 일 때 필요)
-function readRawBody(req, maxBytes) {
-  return new Promise((resolve, reject) => {
+// Vercel Node 런타임은 Content-Type 에 따라 req.body 를 자동 파싱하지만,
+// text/csv 는 타입에 따라 Buffer/String/undefined 중 무엇이 올지 보장되지 않는다.
+// → req.body 우선, 없으면 스트림에서 직접 읽는다.
+async function readBodyAsString(req, maxBytes) {
+  // 1) 이미 파싱된 body 가 있는 경우
+  const b = req.body;
+  if (typeof b === 'string') return b;
+  if (Buffer.isBuffer(b)) return b.toString('utf8');
+  if (b && typeof b === 'object') {
+    // 의외의 JSON 파싱 결과 — 그대로 문자열화
+    try { return JSON.stringify(b); } catch { /* noop */ }
+  }
+  // 2) 스트림에서 직접 읽기
+  return await new Promise((resolve, reject) => {
     let total = 0;
     const chunks = [];
     req.on('data', chunk => {
@@ -65,12 +72,15 @@ export default async function handler(req, res) {
 
       let csv;
       try {
-        csv = await readRawBody(req, MAX_BYTES);
+        csv = await readBodyAsString(req, MAX_BYTES);
       } catch (e) {
         return res.status(e.status || 400).json({ error: e.message || 'invalid body' });
       }
       if (!csv || csv.length < 10) {
         return res.status(400).json({ error: 'empty or invalid CSV body' });
+      }
+      if (csv.length > MAX_BYTES) {
+        return res.status(413).json({ error: `file too large (max ${MAX_BYTES} bytes)` });
       }
 
       const uploadedAt = Date.now();
