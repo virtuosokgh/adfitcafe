@@ -9,9 +9,9 @@
 
   // 네이버 캐시 키는 naver.js와 통일 (한 곳에서 업로드하면 전역 유지)
   const CMP_NAVER_CACHE_KEY = 'naver_csv_cache';
-  const KAKAO_RE  = /(카페|테이블)/;
-  const GOOGLE_RE = /카페/;
-  const NAVER_RE  = /카페/;
+  const KAKAO_RE  = /(카페|테이블|cafe)/i;
+  const GOOGLE_RE = /카페|cafe/i;
+  const NAVER_RE  = /카페|cafe/i;
 
   // 상태
   let cmpPeriod = 'daily';
@@ -242,7 +242,7 @@
     for (let i = 1; i < lines.length; i++) {
       const c = splitCsv(lines[i]);
       const media = (c[iMedia] || '').trim();
-      if (!media.includes('카페')) continue;
+      if (!/카페|cafe/i.test(media)) continue;
       let date = (c[iDate] || '').trim();
       const isMonthly = date.endsWith('-00');
       if (isMonthly) date = date.slice(0, 7);

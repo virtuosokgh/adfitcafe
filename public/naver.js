@@ -120,8 +120,8 @@ function parseNaverCSV(text) {
     const cells = naverParseCSVLine(lines[i]);
     const obj = {};
     headers.forEach((h, idx) => { obj[h] = (cells[idx] || '').trim(); });
-    // 매체에 '카페'가 포함된 행만 처리
-    if (!obj['매체'] || !obj['매체'].includes('카페')) continue;
+    // 매체에 '카페' / 'cafe' / 'Cafe' 가 포함된 행만 처리
+    if (!obj['매체'] || !/카페|cafe/i.test(obj['매체'])) continue;
     let date = obj['날짜'] || '';
     const isMonthly = date.endsWith('-00');
     if (isMonthly) date = date.slice(0, 7);
@@ -240,6 +240,7 @@ function naverGroupByMonth(rows) {
 function naverGetMetricValue(row, metric) {
   switch (metric) {
     case 'profit':     return row.profit     || 0;
+    case 'request':    return row.request    || 0;
     case 'impression': return row.impression || 0;
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.impression ? (row.click / row.impression * 100) : 0;
@@ -252,6 +253,7 @@ function naverGetMetricValue(row, metric) {
 function naverGetMetricLabel(metric) {
   switch (metric) {
     case 'profit':     return '수익 (원)';
+    case 'request':    return '요청수';
     case 'impression': return '노출수';
     case 'click':      return '클릭수';
     case 'ctr':        return 'CTR (%)';
@@ -264,6 +266,7 @@ function naverGetMetricLabel(metric) {
 function naverFormatMetricValue(v, metric) {
   switch (metric) {
     case 'profit':     return won(Math.round(v));
+    case 'request':
     case 'impression':
     case 'click':      return comma(Math.round(v));
     case 'ctr':
@@ -346,6 +349,7 @@ function renderNaverSummary(rowsA, rowsB = []) {
   }
 
   setEl('naver-total-profit',     won(a.profit),    a.profit,    hasCmp ? won(b.profit)    : '', hasCmp ? b.profit    : 0);
+  setEl('naver-total-request',    comma(a.req),     a.req,       hasCmp ? comma(b.req)     : '', hasCmp ? b.req       : 0);
   setEl('naver-total-impression', comma(a.imp),     a.imp,       hasCmp ? comma(b.imp)     : '', hasCmp ? b.imp       : 0);
   setEl('naver-total-click',      comma(a.clk),     a.clk,       hasCmp ? comma(b.clk)     : '', hasCmp ? b.clk       : 0);
   setElNoCopy('naver-total-ctr',  a.ctr + '%',      hasCmp ? b.ctr + '%' : '');
