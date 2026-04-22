@@ -7,8 +7,10 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "google-auth-library": "^10.6.2",
-    "googleapis": "^171.4.0",
     "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0"
   }
 }
