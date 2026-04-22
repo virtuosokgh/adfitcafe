@@ -280,6 +280,8 @@
   // 데이터 조회 (3개 플랫폼 병렬)
   // ──────────────────────────────────────────────
   // 카카오 응답 → 표준 행
+  //   unit = adunitId (예: "DAN-0DM6xroBT6yPi5Xg") 로 식별
+  //   adunitName은 부가정보로 유지
   function mapKakaoRows(j) {
     const out = [];
     for (const r of (j.rows || [])) {
@@ -290,7 +292,8 @@
         : d;
       out.push({
         platform: 'kakao',
-        unit: r.adunitName,
+        unit: r.adunitId || r.adunitName,   // Unit ID 사용
+        name: r.adunitName,                  // 원본 유닛명 (표시용)
         date: dateIso,
         impression: Number(r.impression || 0),
         click: Number(r.click || 0),
