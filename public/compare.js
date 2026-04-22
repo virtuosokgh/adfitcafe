@@ -691,23 +691,25 @@
       data: allKeys.map(k => buckets[s.key][k] || 0),
       borderColor: s.color,
       backgroundColor: s.color + '22',
-      tension: 0.3, fill: false, pointRadius: 3, borderWidth: 2,
+      tension: 0.3, fill: false, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2,
     }));
 
-    // 전체 합계 라인 추가 (세 플랫폼 합)
+    // 전체 합계 라인 (세 플랫폼 합) — 은은한 슬레이트 톤 solid 라인
     const totalData = allKeys.map(k =>
       (buckets.kakao[k] || 0) + (buckets.google[k] || 0) + (buckets.naver[k] || 0)
     );
     series.push({
-      label: '⚫ 전체 합계',
+      label: '전체 합계',
       data: totalData,
-      borderColor: '#111827',
-      backgroundColor: '#11182733',
-      borderDash: [6, 4],       // 점선으로 구분
-      tension: 0.3,
+      borderColor: '#64748B',        // slate-500, 차분한 회색
+      backgroundColor: 'transparent',
+      tension: 0.35,
       fill: false,
-      pointRadius: 4,
-      borderWidth: 3,
+      pointRadius: 0,                // 기본 상태에선 점 없음 → 깔끔
+      pointHoverRadius: 5,           // 호버 시에만 노출
+      pointBackgroundColor: '#64748B',
+      borderWidth: 2,
+      order: 0,                      // 다른 라인 위에 깔끔히 표시
     });
 
     if (cmpTrendChart) cmpTrendChart.destroy();
