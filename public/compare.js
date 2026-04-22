@@ -7,7 +7,8 @@
 (function () {
   'use strict';
 
-  const CMP_NAVER_CACHE_KEY = 'naver_csv_cache_v1';
+  // 네이버 캐시 키는 naver.js와 통일 (한 곳에서 업로드하면 전역 유지)
+  const CMP_NAVER_CACHE_KEY = 'naver_csv_cache';
   const KAKAO_RE  = /(카페|테이블)/;
   const GOOGLE_RE = /카페/;
   const NAVER_RE  = /카페/;
@@ -19,9 +20,33 @@
   let cmpTrendChart = null;
   let cmpPieChart   = null;
 
-  // 클라이언트 캐시 (기간별, 3분 TTL)
-  const CLIENT_CACHE_TTL = 3 * 60 * 1000;
-  const clientCache = new Map();  // key(start-end) → { rows, at }
+  // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
+  const PERSIST_CACHE_KEY = 'cmp_fetch_cache_v1';
+  const CACHE_MAX_ENTRIES = 5;   // 기간별 최대 5개 유지 (오래된 것 퇴출)
+  const clientCache = new Map(); // key(start-end) → { kRows, gRows, at }
+  loadPersistCache();
+
+  function loadPersistCache() {
+    try {
+      const raw = localStorage.getItem(PERSIST_CACHE_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      for (const [k, v] of Object.entries(obj || {})) {
+        if (v && Array.isArray(v.kRows) && Array.isArray(v.gRows)) clientCache.set(k, v);
+      }
+    } catch { /* 손상된 캐시 무시 */ }
+  }
+  function savePersistCache() {
+    try {
+      // 최근 entry N개만 유지 (LRU-ish)
+      const entries = Array.from(clientCache.entries())
+        .sort(([, a], [, b]) => (b.at || 0) - (a.at || 0))
+        .slice(0, CACHE_MAX_ENTRIES);
+      clientCache.clear();
+      entries.forEach(([k, v]) => clientCache.set(k, v));
+      localStorage.setItem(PERSIST_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
+    } catch { /* quota 초과 시 무시 */ }
+  }
 
   // MCS 인스턴스
   let mcsK, mcsG, mcsN;
@@ -95,8 +120,8 @@
       syncNaverStatus();
     });
 
-    // 조회 버튼
-    document.getElementById('cmp-search-btn').addEventListener('click', fetchAndRender);
+    // 조회 버튼 — 항상 최신 데이터 재조회 (캐시 무시)
+    document.getElementById('cmp-search-btn').addEventListener('click', () => fetchAndRender({ force: true }));
 
     // 테이블 헤더 정렬
     document.querySelectorAll('#cmp-table thead th').forEach(th => {
@@ -167,6 +192,15 @@
 
   function loadNaverFromCache() {
     try {
+      // 구버전 키에서 신버전 키로 1회 마이그레이션 (기존 업로드 유지)
+      const LEGACY_KEY = 'naver_csv_cache_v1';
+      if (!localStorage.getItem(CMP_NAVER_CACHE_KEY)) {
+        const legacy = localStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+          localStorage.setItem(CMP_NAVER_CACHE_KEY, legacy);
+          localStorage.removeItem(LEGACY_KEY);
+        }
+      }
       const raw = localStorage.getItem(CMP_NAVER_CACHE_KEY);
       if (!raw) return;
       const { rows } = JSON.parse(raw);
@@ -378,7 +412,8 @@
     if (el) el.textContent = msg;
   }
 
-  async function fetchAndRender() {
+  async function fetchAndRender(opts = {}) {
+    const force = opts.force === true;
     const { start, end } = getDateRange();
     if (!start || !end) { alert('시작일/종료일을 선택하세요.'); return; }
 
@@ -387,7 +422,7 @@
     errorEl.classList.add('hidden');
     loadingEl.classList.remove('hidden');
     resetCuteStates();
-    setCuteMsg('카카오와 구글한테 달려가는 중...');
+    setCuteMsg(force ? '최신 데이터 가져오는 중...' : '카카오와 구글한테 달려가는 중...');
     ['cmp-summary', 'cmp-charts', 'cmp-table-section'].forEach(id =>
       document.getElementById(id).style.display = 'none');
 
@@ -395,18 +430,19 @@
     const cacheKey = `${sYMD}-${eYMD}`;
     const t0 = performance.now();
 
-    // 클라이언트 캐시 HIT → 즉시 반환 (캐시 애니메이션은 최소화)
+    // 캐시 HIT → 즉시 반환 (force=true 면 캐시 무시)
     const cHit = clientCache.get(cacheKey);
-    if (cHit && (Date.now() - cHit.at) < CLIENT_CACHE_TTL) {
+    if (!force && cHit) {
       const nRows = mapNaverRows(start, end);
       cmpRawRows = [...cHit.kRows, ...cHit.gRows, ...nRows];
       setCuteState('kakao',  'done', `${cHit.kRows.length}건`);
       setCuteState('google', 'done', `${cHit.gRows.length}건`);
       setCuteState('naver',  nRows.length ? 'done' : 'empty', nRows.length ? `${nRows.length}건` : '업로드 없음');
-      setCuteMsg('⚡ 캐시에서 즉시 불러왔어요!');
+      const ageMin = Math.round((Date.now() - cHit.at) / 60000);
+      setCuteMsg(`⚡ 저장된 데이터 (${ageMin < 1 ? '방금' : ageMin + '분 전'})! 최신 조회는 "통합 조회" 버튼을 눌러주세요`);
       finalizeAfterFetch(cacheKey);
       // 살짝 보여줬다가 숨기기
-      setTimeout(() => loadingEl.classList.add('hidden'), 400);
+      setTimeout(() => loadingEl.classList.add('hidden'), 600);
       console.log(`[compare] cache hit, ${Math.round(performance.now()-t0)}ms`);
       return;
     }
@@ -475,6 +511,7 @@
       clearTimeout(msgTimer1); clearTimeout(msgTimer2);
 
       clientCache.set(cacheKey, { kRows, gRows, at: Date.now() });
+      savePersistCache();
       cmpRawRows = [...kRows, ...gRows, ...nRows];
       console.log(`[compare] fetched k=${kRows.length} g=${gRows.length} n=${nRows.length}, ${Math.round(performance.now()-t0)}ms`);
 

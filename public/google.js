@@ -55,6 +55,20 @@ const gTableSec  = document.getElementById('google-table-section');
 const gTableBody = document.getElementById('google-result-body');
 const gChartH2   = document.getElementById('google-chart-title-h2');
 
+// ── 영구 캐시 (조회 결과를 reload 후에도 유지) ──────────
+const GOOGLE_CACHE_KEY = 'google_last_result_v1';
+function googleSaveCache(payload) {
+  try { localStorage.setItem(GOOGLE_CACHE_KEY, JSON.stringify(payload)); }
+  catch { /* quota 초과 — 무시 */ }
+}
+function googleLoadCache() {
+  try {
+    const raw = localStorage.getItem(GOOGLE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
 // ── flatpickr 초기화 (지연 실행: Google 탭 활성화 시) ──
 let gInited = false;
 function initGoogleOnce() {
@@ -99,7 +113,33 @@ function initGoogleOnce() {
     document.getElementById('mcs-google-cmp-adunit'), '광고단위명 비교 선택',
     () => googleReRender()
   );
+
+  // 이전 조회 결과가 캐시에 있으면 복원 (조회 버튼 누를 필요 없이 바로 화면 표시)
+  const cached = googleLoadCache();
+  if (cached && Array.isArray(cached.rows) && cached.rows.length > 0) {
+    googleAllRows  = cached.rows;
+    googleAllRowsB = Array.isArray(cached.rowsB) ? cached.rowsB : [];
+    // 날짜 input 도 캐시된 범위로 맞춤
+    if (cached.startDate) gFpStartD.setDate(cached.startDate, false);
+    if (cached.endDate)   gFpEndD.setDate(cached.endDate, false);
+    if (cached.cmpStart)  gCmpFpStartD.setDate(cached.cmpStart, false);
+    if (cached.cmpEnd)    gCmpFpEndD.setDate(cached.cmpEnd, false);
+    const names = [...new Set(googleAllRows.map(r => r.adUnit).filter(Boolean))].sort();
+    mcsGoogleAdUnit.refresh(names);
+    mcsGoogleCmpAdUnit.refresh(names);
+    googleReRender();
+  }
 }
+
+// 통합 비교 탭(compare.js)에서 Google 유닛을 미리 채우기 위해서라도
+// 페이지 로드 직후 한 번 초기화 (flatpickr 은 이미 있을 때만 동작)
+// 실제 flatpickr 은 탭 진입 시점에 초기화되므로, 캐시 복원만 담당하는 경량 버전.
+(function hydrateGoogleOnBoot() {
+  const cached = googleLoadCache();
+  if (!cached || !Array.isArray(cached.rows) || cached.rows.length === 0) return;
+  googleAllRows  = cached.rows;
+  googleAllRowsB = Array.isArray(cached.rowsB) ? cached.rowsB : [];
+})();
 
 // monthSelectPlugin 체크
 function monthSelectPluginIfExists() {
@@ -189,6 +229,17 @@ async function googleFetchAndRender() {
     const names = [...new Set(googleAllRows.map(r => r.adUnit).filter(Boolean))].sort();
     mcsGoogleAdUnit.refresh(names);
     mcsGoogleCmpAdUnit.refresh(names);
+
+    // 결과를 localStorage 에 저장 (다음 접속 시 자동 복원)
+    googleSaveCache({
+      rows: googleAllRows,
+      rowsB: googleAllRowsB,
+      startDate: gStartD.value,
+      endDate:   gEndD.value,
+      cmpStart:  gCmpStartD.value || '',
+      cmpEnd:    gCmpEndD.value || '',
+      savedAt:   Date.now(),
+    });
 
     googleReRender();
   } catch (err) {
