@@ -847,10 +847,10 @@ function handleNaverFile(file) {
     }
     naverAllRows = rows;
     window.naverAllRows = rows;  // compare.js에서 접근
-    // 캐시 저장 (다음 접속 시 자동 복원용)
+    // 캐시 저장 (다음 접속 시 자동 복원용, csv 원본도 함께 저장 → 필터 규칙 변경 시 재파싱 가능)
     try {
       localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
-        fileName: file.name, uploadedAt: new Date().toISOString(), rows
+        fileName: file.name, uploadedAt: new Date().toISOString(), rows, csv: text
       }));
     } catch (_) { /* 용량 초과 시 무시 */ }
     const sizeKB = Math.round(file.size / 1024);
@@ -944,7 +944,21 @@ function loadNaverFromCache() {
   try {
     const raw = localStorage.getItem(NAVER_CACHE_KEY);
     if (!raw) return;
-    const { fileName, uploadedAt, rows } = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const { fileName, uploadedAt, csv } = parsed;
+    let rows = parsed.rows;
+    // 원본 CSV가 있으면 최신 필터로 재파싱 (예: 영문 cafe 포함)
+    if (typeof csv === 'string' && csv.length) {
+      const fresh = parseNaverCSV(csv);
+      if (fresh.length) {
+        rows = fresh;
+        try {
+          localStorage.setItem(NAVER_CACHE_KEY, JSON.stringify({
+            ...parsed, rows: fresh
+          }));
+        } catch (_) {}
+      }
+    }
     if (!rows || rows.length === 0) return;
     naverAllRows = rows;
     window.naverAllRows = rows;  // compare.js에서 접근

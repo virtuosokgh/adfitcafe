@@ -235,12 +235,14 @@
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const rows = parseNaverCsv(ev.target.result);
+        const csv = ev.target.result;
+        const rows = parseNaverCsv(csv);
         if (!rows.length) throw new Error('카페 매체 행이 없습니다.');
         window.naverAllRows = rows;
         try {
+          // csv 원본도 함께 저장 → 차후 필터 규칙 변경 시 재파싱 가능
           localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
-            fileName: file.name, uploadedAt: Date.now(), rows
+            fileName: file.name, uploadedAt: Date.now(), rows, csv
           }));
         } catch {}
         syncNaverStatus(file.name);
@@ -266,7 +268,23 @@
       }
       const raw = localStorage.getItem(CMP_NAVER_CACHE_KEY);
       if (!raw) return;
-      const { rows } = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // 원본 CSV가 있으면 재파싱 (필터 규칙 변경 대응 — 예: 영문 cafe)
+      if (parsed && typeof parsed.csv === 'string' && parsed.csv.length) {
+        const fresh = parseNaverCsv(parsed.csv);
+        if (fresh.length) {
+          window.naverAllRows = fresh;
+          // 재파싱 결과를 캐시에 다시 써서 다음에 빠르게 복원
+          try {
+            localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
+              ...parsed, rows: fresh
+            }));
+          } catch {}
+          return;
+        }
+      }
+      // 구형 캐시 (원본 CSV 없음) → 저장된 rows 사용
+      const { rows } = parsed;
       if (Array.isArray(rows) && rows.length) window.naverAllRows = rows;
     } catch {}
   }
