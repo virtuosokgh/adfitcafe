@@ -1,5 +1,5 @@
 /**
- * 네이버 CSV 공유 저장소 API
+ * 네이버 CSV 공유 저장소 API (Vercel Node.js Serverless)
  *
  *   POST   /api/naver-csv?fileName=... &uploader=...
  *     body: CSV 텍스트
@@ -12,27 +12,20 @@
  *   DELETE /api/naver-csv
  *     → Blob + 메타 삭제
  *
- * 서버리스 함수가 꺼졌다 켜져도 Blob 은 영속 저장소(AWS S3 기반)라 모든 유저가 공유합니다.
+ * ※ @vercel/blob 은 undici / node:stream 등 Node 전용 모듈을 사용하므로
+ *    Edge Runtime 이 아닌 Node.js 서버리스 런타임에서 동작한다.
  */
 import { put, head, del } from '@vercel/blob';
 
-export const config = { runtime: 'edge' };
+export const config = {
+  runtime: 'nodejs20.x',
+  // POST 본문(CSV)을 raw 문자열로 받기 위해 파서 비활성화
+  api: { bodyParser: false },
+};
 
 const CSV_KEY  = 'naver/latest.csv';
 const META_KEY = 'naver/latest.meta.json';
-
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-
-function jsonResp(data, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-      ...extraHeaders,
-    },
-  });
-}
 
 // head 는 존재하지 않으면 throw → 안전하게 null 로 변환
 async function safeHead(pathname) {
@@ -40,19 +33,44 @@ async function safeHead(pathname) {
   catch { return null; }
 }
 
-export default async function handler(req) {
+// raw request body 를 문자열로 읽기 (bodyParser: false 일 때 필요)
+function readRawBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let total = 0;
+    const chunks = [];
+    req.on('data', chunk => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(Object.assign(new Error('file too large'), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try { resolve(Buffer.concat(chunks).toString('utf8')); }
+      catch (e) { reject(e); }
+    });
+    req.on('error', reject);
+  });
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+
   try {
     if (req.method === 'POST') {
-      const { searchParams } = new URL(req.url);
-      const fileName = (searchParams.get('fileName') || 'naver.csv').slice(0, 200);
-      const uploader = (searchParams.get('uploader') || '').slice(0, 80);
+      const fileName = String(req.query?.fileName || 'naver.csv').slice(0, 200);
+      const uploader = String(req.query?.uploader || '').slice(0, 80);
 
-      const csv = await req.text();
-      if (!csv || csv.length < 10) {
-        return jsonResp({ error: 'empty or invalid CSV body' }, 400);
+      let csv;
+      try {
+        csv = await readRawBody(req, MAX_BYTES);
+      } catch (e) {
+        return res.status(e.status || 400).json({ error: e.message || 'invalid body' });
       }
-      if (csv.length > MAX_BYTES) {
-        return jsonResp({ error: `file too large (max ${MAX_BYTES} bytes)` }, 413);
+      if (!csv || csv.length < 10) {
+        return res.status(400).json({ error: 'empty or invalid CSV body' });
       }
 
       const uploadedAt = Date.now();
@@ -78,32 +96,31 @@ export default async function handler(req) {
         cacheControlMaxAge: 0,
       });
 
-      return jsonResp({ ok: true, ...metaPayload });
+      return res.status(200).json({ ok: true, ...metaPayload });
     }
 
     if (req.method === 'GET') {
       const metaHead = await safeHead(META_KEY);
-      if (!metaHead) return jsonResp({ exists: false });
+      if (!metaHead) return res.status(200).json({ exists: false });
 
       let meta = null;
       try {
-        const res = await fetch(metaHead.url, { cache: 'no-store' });
-        if (res.ok) meta = await res.json();
+        const r = await fetch(metaHead.url, { cache: 'no-store' });
+        if (r.ok) meta = await r.json();
       } catch {}
 
-      // 메타가 깨졌거나 없으면 CSV 만이라도 가져오기
       const csvHead = await safeHead(CSV_KEY);
-      if (!csvHead) return jsonResp({ exists: false });
+      if (!csvHead) return res.status(200).json({ exists: false });
 
       let csv = '';
       try {
-        const res = await fetch(meta?.csvUrl || csvHead.url, { cache: 'no-store' });
-        if (res.ok) csv = await res.text();
+        const r = await fetch(meta?.csvUrl || csvHead.url, { cache: 'no-store' });
+        if (r.ok) csv = await r.text();
       } catch {}
 
-      if (!csv) return jsonResp({ exists: false });
+      if (!csv) return res.status(200).json({ exists: false });
 
-      return jsonResp({
+      return res.status(200).json({
         exists: true,
         fileName:   meta?.fileName   || 'naver.csv',
         uploader:   meta?.uploader   || '',
@@ -118,11 +135,13 @@ export default async function handler(req) {
         (async () => { const h = await safeHead(CSV_KEY);  if (h?.url) await del(h.url); })(),
         (async () => { const h = await safeHead(META_KEY); if (h?.url) await del(h.url); })(),
       ]);
-      return jsonResp({ ok: true, results: results.map(r => r.status) });
+      return res.status(200).json({ ok: true, results: results.map(r => r.status) });
     }
 
-    return jsonResp({ error: 'method not allowed' }, 405, { Allow: 'GET, POST, DELETE' });
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    return res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
-    return jsonResp({ error: err?.message || 'server error' }, 500);
+    console.error('naver-csv handler error:', err);
+    return res.status(500).json({ error: err?.message || 'server error' });
   }
 }
