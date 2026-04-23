@@ -1069,16 +1069,14 @@
           if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; chart.update('none'); }
         },
         plugins: {
-          // 범례: 텍스트 없이 색상 스와치만 — 각 플랫폼 색은 위 카드/테이블에서 확인 가능
+          // 범례: 플랫폼 텍스트 + 컬러 스와치를 간결하게 표시
           legend: {
             position: 'top',
             align: 'end',
             labels: {
-              boxWidth: 18, boxHeight: 10, padding: 10, useBorderRadius: true, borderRadius: 3,
-              generateLabels: (chart) => {
-                const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                return base.map(it => ({ ...it, text: '' }));
-              },
+              boxWidth: 14, boxHeight: 10, padding: 12,
+              useBorderRadius: true, borderRadius: 3,
+              font: { size: 12 },
             },
           },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: ${meta.fmt(c.parsed.y)}` } },
