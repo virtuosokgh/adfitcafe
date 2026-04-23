@@ -1069,7 +1069,18 @@
           if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; chart.update('none'); }
         },
         plugins: {
-          legend: { position: 'top' },
+          // 범례: 텍스트 없이 색상 스와치만 — 각 플랫폼 색은 위 카드/테이블에서 확인 가능
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: {
+              boxWidth: 18, boxHeight: 10, padding: 10, useBorderRadius: true, borderRadius: 3,
+              generateLabels: (chart) => {
+                const base = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                return base.map(it => ({ ...it, text: '' }));
+              },
+            },
+          },
           tooltip: { callbacks: { label: c => `${c.dataset.label}: ${meta.fmt(c.parsed.y)}` } },
         },
         scales: {
