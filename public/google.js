@@ -27,13 +27,16 @@ const yyyymmdd = d => d.toISOString().slice(0,10).replace(/-/g,'');
 const toDateStr = d => d.toISOString().slice(0,10);
 
 function gFmtNum(v, metric) {
-  if (metric === 'profit' || metric === 'ecpm') return krw(v);
+  if (metric === 'profit' || metric === 'ecpm' || metric === 'reqEcpm') return krw(v);
   if (metric === 'ctr') return gpct(v);
   return num(v);
 }
 
 function gMetricLabel(m) {
-  return { profit: '수익', impression: '노출수', click: '클릭수', ctr: 'CTR', ecpm: 'eCPM' }[m] || '수익';
+  return {
+    profit: '수익', impression: '노출수', request: '요청수', click: '클릭수',
+    ctr: 'CTR', ecpm: '노출 eCPM', reqEcpm: '요청 eCPM',
+  }[m] || '수익';
 }
 
 // ── DOM ─────────────────────────────────────
@@ -258,22 +261,25 @@ function mapGoogleRows(headers, rows) {
 
   const cDate = headers.find(h => /DATE/i.test(h));
   const cName = headers.find(h => /AD_UNIT_NAME/i.test(h));
+  const cReq  = pickCol(/TOTAL_AD_REQUESTS/i,                 /AD_REQUESTS/i);
   const cImp  = pickCol(/TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS/i, /IMPRESSIONS/i);
   const cClk  = pickCol(/TOTAL_LINE_ITEM_LEVEL_CLICKS/i,      /CLICKS/i);
   const cRev  = pickCol(/TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE/i, /REVENUE/i);
 
   return rows.map(r => {
+    const request    = Number(r[cReq] || 0);
     const impression = Number(r[cImp] || 0);
     const click      = Number(r[cClk] || 0);
     // Ad Manager 수익은 micros 단위 (1원 = 1,000,000)
     let profit = Number(r[cRev] || 0);
     if (profit >= 1000) profit = profit / 1e6;  // micros → 원
-    const ctr  = impression > 0 ? (click / impression * 100) : 0;
-    const ecpm = impression > 0 ? (profit / impression * 1000) : 0;
+    const ctr     = impression > 0 ? (click / impression * 100) : 0;
+    const ecpm    = impression > 0 ? (profit / impression * 1000) : 0;
+    const reqEcpm = request    > 0 ? (profit / request    * 1000) : 0;
     return {
       date: r[cDate] || '',
       adUnit: r[cName] || '(미지정)',
-      impression, click, ctr, ecpm, profit,
+      request, impression, click, ctr, ecpm, reqEcpm, profit,
     };
   }).filter(r => r.date);
 }
@@ -327,7 +333,8 @@ function groupGoogleBy(rows, unit) {
     } else {
       key = r.date.slice(0, 7);
     }
-    const prev = map.get(key) || { date: key, adUnit: '합계', impression: 0, click: 0, profit: 0 };
+    const prev = map.get(key) || { date: key, adUnit: '합계', request: 0, impression: 0, click: 0, profit: 0 };
+    prev.request    += r.request || 0;
     prev.impression += r.impression;
     prev.click      += r.click;
     prev.profit     += r.profit;
@@ -335,13 +342,14 @@ function groupGoogleBy(rows, unit) {
   }
   return [...map.values()].map(r => ({
     ...r,
-    ctr:  r.impression > 0 ? (r.click / r.impression * 100) : 0,
-    ecpm: r.impression > 0 ? (r.profit / r.impression * 1000) : 0,
+    ctr:     r.impression > 0 ? (r.click / r.impression * 100) : 0,
+    ecpm:    r.impression > 0 ? (r.profit / r.impression * 1000) : 0,
+    reqEcpm: r.request    > 0 ? (r.profit / r.request    * 1000) : 0,
   })).sort((a, b) => a.date < b.date ? -1 : 1);
 }
 
 function sumMetric(rows, m) {
-  if (m === 'profit' || m === 'impression' || m === 'click')
+  if (m === 'profit' || m === 'impression' || m === 'click' || m === 'request')
     return rows.reduce((a, r) => a + (r[m] || 0), 0);
   if (m === 'ctr') {
     const imp = rows.reduce((a, r) => a + r.impression, 0);
@@ -353,29 +361,25 @@ function sumMetric(rows, m) {
     const prf = rows.reduce((a, r) => a + r.profit, 0);
     return imp > 0 ? (prf / imp * 1000) : 0;
   }
+  if (m === 'reqEcpm') {
+    const req = rows.reduce((a, r) => a + (r.request || 0), 0);
+    const prf = rows.reduce((a, r) => a + r.profit, 0);
+    return req > 0 ? (prf / req * 1000) : 0;
+  }
   return 0;
 }
 
 function renderGoogleSummary(rowsA, rowsB) {
-  const A = {
-    profit:     sumMetric(rowsA, 'profit'),
-    impression: sumMetric(rowsA, 'impression'),
-    click:      sumMetric(rowsA, 'click'),
-    ctr:        sumMetric(rowsA, 'ctr'),
-    ecpm:       sumMetric(rowsA, 'ecpm'),
-  };
+  const metrics = ['profit', 'impression', 'request', 'click', 'ctr', 'ecpm', 'reqEcpm'];
+  const agg = rows => Object.fromEntries(metrics.map(m => [m, sumMetric(rows, m)]));
+  const A = agg(rowsA);
   const hasB = rowsB.length > 0;
-  const B = hasB ? {
-    profit:     sumMetric(rowsB, 'profit'),
-    impression: sumMetric(rowsB, 'impression'),
-    click:      sumMetric(rowsB, 'click'),
-    ctr:        sumMetric(rowsB, 'ctr'),
-    ecpm:       sumMetric(rowsB, 'ecpm'),
-  } : null;
+  const B = hasB ? agg(rowsB) : null;
 
   const fmt = (v, m) => gFmtNum(v, m);
   const setCard = (id, m) => {
     const el = document.getElementById(id);
+    if (!el) return;
     if (!hasB) { el.innerHTML = fmt(A[m], m); return; }
     el.innerHTML =
       `<span class="cv-primary">${fmt(A[m], m)}</span>` +
@@ -383,9 +387,11 @@ function renderGoogleSummary(rowsA, rowsB) {
   };
   setCard('google-total-profit',     'profit');
   setCard('google-total-impression', 'impression');
+  setCard('google-total-request',    'request');
   setCard('google-total-click',      'click');
   setCard('google-total-ctr',        'ctr');
   setCard('google-total-ecpm',       'ecpm');
+  setCard('google-total-req-ecpm',   'reqEcpm');
 }
 
 function renderGoogleChart(rowsA, rowsB) {
@@ -397,9 +403,10 @@ function renderGoogleChart(rowsA, rowsB) {
     const map = new Map();
     for (const r of rows) {
       const v = r[m] ?? 0;
-      if (m === 'ctr' || m === 'ecpm') {
-        const prev = map.get(r.date) || { imp: 0, clk: 0, prf: 0 };
-        prev.imp += r.impression; prev.clk += r.click; prev.prf += r.profit;
+      if (m === 'ctr' || m === 'ecpm' || m === 'reqEcpm') {
+        const prev = map.get(r.date) || { imp: 0, clk: 0, req: 0, prf: 0 };
+        prev.imp += r.impression; prev.clk += r.click;
+        prev.req += (r.request || 0); prev.prf += r.profit;
         map.set(r.date, prev);
       } else {
         map.set(r.date, (map.get(r.date) || 0) + v);
@@ -408,8 +415,9 @@ function renderGoogleChart(rowsA, rowsB) {
     const dates = [...map.keys()].sort();
     const values = dates.map(d => {
       const v = map.get(d);
-      if (m === 'ctr')  return v.imp > 0 ? (v.clk / v.imp * 100) : 0;
-      if (m === 'ecpm') return v.imp > 0 ? (v.prf / v.imp * 1000) : 0;
+      if (m === 'ctr')     return v.imp > 0 ? (v.clk / v.imp * 100) : 0;
+      if (m === 'ecpm')    return v.imp > 0 ? (v.prf / v.imp * 1000) : 0;
+      if (m === 'reqEcpm') return v.req > 0 ? (v.prf / v.req * 1000) : 0;
       return v;
     });
     return { dates, values };
@@ -473,10 +481,12 @@ function renderGoogleTable(rowsA, rowsB) {
     <tr class="${cls}">
       <td>${r.date}</td>
       <td>${r.adUnit}</td>
+      <td>${num(r.request || 0)}</td>
       <td>${num(r.impression)}</td>
       <td>${num(r.click)}</td>
       <td>${gpct(r.ctr)}</td>
       <td>${krw(r.ecpm)}</td>
+      <td>${krw(r.reqEcpm || 0)}</td>
       <td>${krw(r.profit)}</td>
       <td>${totalProfit > 0 ? gpct(r.profit / totalProfit * 100) : '-'}</td>
     </tr>`;
@@ -514,11 +524,12 @@ document.querySelectorAll('#google-result-table thead th').forEach(th => {
 document.getElementById('google-csv-btn').addEventListener('click', () => {
   const rowsA = applyGoogleFilter(googleAllRows, mcsGoogleAdUnit);
   if (!rowsA.length) return;
-  const header = ['날짜','광고단위명','노출수','클릭수','CTR(%)','eCPM(원)','수익(원)'];
+  const header = ['날짜','광고단위명','요청수','노출수','클릭수','CTR(%)','노출 eCPM(원)','요청 eCPM(원)','수익(원)'];
   const lines = [header.join(',')];
   for (const r of rowsA) {
-    lines.push([r.date, `"${r.adUnit}"`, r.impression, r.click,
-                r.ctr.toFixed(2), r.ecpm.toFixed(0), r.profit.toFixed(0)].join(','));
+    lines.push([r.date, `"${r.adUnit}"`, r.request || 0, r.impression, r.click,
+                r.ctr.toFixed(2), r.ecpm.toFixed(0),
+                (r.reqEcpm || 0).toFixed(0), r.profit.toFixed(0)].join(','));
   }
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');

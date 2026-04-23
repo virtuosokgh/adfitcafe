@@ -146,9 +146,9 @@ app.get('/api/google/report', async (req, res) => {
   const promise = runGoogleReport({
     networkCode: GOOGLE_NETWORK_CODE,
     dimensions: ['DATE', 'AD_UNIT_NAME'],
-    // TOTAL_LINE_ITEM_LEVEL_* 만 요청 (Ad Server + Ad Exchange 합산)
-    // 컬럼 수를 줄여 리포트 생성 속도 향상 (9 → 3)
+    // TOTAL_LINE_ITEM_LEVEL_* (Ad Server + Ad Exchange 합산) + TOTAL_AD_REQUESTS(총요청)
     columns: [
+      'TOTAL_AD_REQUESTS',
       'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
       'TOTAL_LINE_ITEM_LEVEL_CLICKS',
       'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
@@ -172,12 +172,13 @@ app.get('/api/google/report', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 네이버 CSV 공유 저장소 (Vercel Blob) — 로컬 개발용 프록시
+// 네이버 CSV 공유 저장소 (Vercel Blob — private store) — 로컬 개발용 프록시
 //   api/naver-csv.js 와 동일한 동작을 Express 에서 제공
 // -------------------------------------------------------------
 const CSV_KEY  = 'naver/latest.csv';
 const META_KEY = 'naver/latest.meta.json';
 const MAX_CSV_BYTES = 10 * 1024 * 1024;
+const BLOB_ACCESS = 'private';
 
 // CSV body parser (raw text)
 app.use('/api/naver-csv', express.text({ type: '*/*', limit: '12mb' }));
@@ -185,6 +186,19 @@ app.use('/api/naver-csv', express.text({ type: '*/*', limit: '12mb' }));
 async function loadBlobSdk() {
   try { return await import('@vercel/blob'); }
   catch { return null; }
+}
+
+// private blob 을 읽어 문자열로 반환. 없으면 null.
+async function readBlobText(blob, pathname) {
+  try {
+    const result = await blob.get(pathname, { access: BLOB_ACCESS });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    return await new Response(result.stream).text();
+  } catch (err) {
+    if (err?.name === 'BlobNotFoundError') return null;
+    console.error(`readBlobText(${pathname}) failed:`, err);
+    return null;
+  }
 }
 
 app.post('/api/naver-csv', async (req, res) => {
@@ -200,16 +214,16 @@ app.post('/api/naver-csv', async (req, res) => {
   const uploader = String(req.query.uploader || '').slice(0, 80);
   const uploadedAt = Date.now();
   try {
-    const csvBlob = await blob.put(CSV_KEY, csv, {
-      access: 'public',
+    await blob.put(CSV_KEY, csv, {
+      access: BLOB_ACCESS,
       contentType: 'text/csv; charset=utf-8',
       addRandomSuffix: false,
       allowOverwrite: true,
       cacheControlMaxAge: 0,
     });
-    const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length, csvUrl: csvBlob.url };
+    const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length };
     await blob.put(META_KEY, JSON.stringify(metaPayload), {
-      access: 'public',
+      access: BLOB_ACCESS,
       contentType: 'application/json; charset=utf-8',
       addRandomSuffix: false,
       allowOverwrite: true,
@@ -229,30 +243,20 @@ app.get('/api/naver-csv', async (req, res) => {
     return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정 (.env.local 확인)' });
   }
   try {
-    let metaHead = null;
-    try { metaHead = await blob.head(META_KEY); } catch {}
-    if (!metaHead) return res.json({ exists: false });
+    const [csvText, metaText] = await Promise.all([
+      readBlobText(blob, CSV_KEY),
+      readBlobText(blob, META_KEY),
+    ]);
+    if (!csvText) return res.json({ exists: false });
     let meta = null;
-    try {
-      const r = await fetch(metaHead.url);
-      if (r.ok) meta = await r.json();
-    } catch {}
-    let csvHead = null;
-    try { csvHead = await blob.head(CSV_KEY); } catch {}
-    if (!csvHead) return res.json({ exists: false });
-    let csv = '';
-    try {
-      const r = await fetch(meta?.csvUrl || csvHead.url);
-      if (r.ok) csv = await r.text();
-    } catch {}
-    if (!csv) return res.json({ exists: false });
+    if (metaText) { try { meta = JSON.parse(metaText); } catch {} }
     res.json({
       exists: true,
       fileName:   meta?.fileName   || 'naver.csv',
       uploader:   meta?.uploader   || '',
       uploadedAt: meta?.uploadedAt || null,
-      bytes: csv.length,
-      csv,
+      bytes: csvText.length,
+      csv: csvText,
     });
   } catch (err) {
     console.error('Blob fetch failed:', err);
@@ -267,13 +271,11 @@ app.delete('/api/naver-csv', async (req, res) => {
     return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정' });
   }
   try {
-    for (const key of [CSV_KEY, META_KEY]) {
-      try {
-        const h = await blob.head(key);
-        if (h?.url) await blob.del(h.url);
-      } catch {}
-    }
-    res.json({ ok: true });
+    const results = await Promise.allSettled([
+      blob.del(CSV_KEY),
+      blob.del(META_KEY),
+    ]);
+    res.json({ ok: true, results: results.map(r => r.status) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -12,36 +12,31 @@
  *   DELETE /api/naver-csv
  *     → Blob + 메타 삭제
  *
+ * ※ 이 프로젝트의 Blob 스토어는 **private access** 로 설정되어 있다.
+ *    - put/get 에 `access: 'private'` 필수
+ *    - 읽기는 서버리스 함수에서만 가능 (BLOB_READ_WRITE_TOKEN 필요)
+ *    - 클라이언트는 이 API 를 프록시로 경유해서 접근
+ *
  * ※ @vercel/blob 은 undici / node:stream 등 Node 전용 모듈을 사용하므로
  *    Edge Runtime 이 아닌 Node.js 서버리스 런타임(기본값) 에서 동작한다.
- *    ※ Vercel 은 config.runtime 에 "edge" | "experimental-edge" | "nodejs" 만 허용.
- *       버전 표기("nodejs20.x") 는 거부하므로 package.json engines 로 제어한다.
  */
-import { put, head, del } from '@vercel/blob';
+import { put, get, del } from '@vercel/blob';
 
 const CSV_KEY  = 'naver/latest.csv';
 const META_KEY = 'naver/latest.meta.json';
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-
-// head 는 존재하지 않으면 throw → 안전하게 null 로 변환
-async function safeHead(pathname) {
-  try { return await head(pathname); }
-  catch { return null; }
-}
+const ACCESS = 'private';
 
 // Vercel Node 런타임은 Content-Type 에 따라 req.body 를 자동 파싱하지만,
-// text/csv 는 타입에 따라 Buffer/String/undefined 중 무엇이 올지 보장되지 않는다.
+// text/csv 는 Buffer/String/undefined 중 무엇이 올지 보장되지 않는다.
 // → req.body 우선, 없으면 스트림에서 직접 읽는다.
 async function readBodyAsString(req, maxBytes) {
-  // 1) 이미 파싱된 body 가 있는 경우
   const b = req.body;
   if (typeof b === 'string') return b;
   if (Buffer.isBuffer(b)) return b.toString('utf8');
   if (b && typeof b === 'object') {
-    // 의외의 JSON 파싱 결과 — 그대로 문자열화
     try { return JSON.stringify(b); } catch { /* noop */ }
   }
-  // 2) 스트림에서 직접 읽기
   return await new Promise((resolve, reject) => {
     let total = 0;
     const chunks = [];
@@ -60,6 +55,20 @@ async function readBodyAsString(req, maxBytes) {
     });
     req.on('error', reject);
   });
+}
+
+// private blob 을 서버에서 읽어 문자열로 반환. 없으면 null.
+async function readBlobText(pathname) {
+  try {
+    const result = await get(pathname, { access: ACCESS });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    return await new Response(result.stream).text();
+  } catch (err) {
+    // not found 는 조용히 null
+    if (err?.name === 'BlobNotFoundError') return null;
+    console.error(`readBlobText(${pathname}) failed:`, err);
+    return null;
+  }
 }
 
 export default async function handler(req, res) {
@@ -85,21 +94,19 @@ export default async function handler(req, res) {
 
       const uploadedAt = Date.now();
 
-      // CSV 본문 저장 (기존 파일 덮어쓰기)
-      const csvBlob = await put(CSV_KEY, csv, {
-        access: 'public',
+      // CSV 본문 저장 (private 스토어)
+      await put(CSV_KEY, csv, {
+        access: ACCESS,
         contentType: 'text/csv; charset=utf-8',
         addRandomSuffix: false,
         allowOverwrite: true,
         cacheControlMaxAge: 0,
       });
 
-      // 메타데이터 JSON 저장
-      const metaPayload = {
-        fileName, uploader, uploadedAt, bytes: csv.length, csvUrl: csvBlob.url,
-      };
+      // 메타데이터 JSON 저장 (private 스토어)
+      const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length };
       await put(META_KEY, JSON.stringify(metaPayload), {
-        access: 'public',
+        access: ACCESS,
         contentType: 'application/json; charset=utf-8',
         addRandomSuffix: false,
         allowOverwrite: true,
@@ -110,40 +117,31 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const metaHead = await safeHead(META_KEY);
-      if (!metaHead) return res.status(200).json({ exists: false });
+      const [csvText, metaText] = await Promise.all([
+        readBlobText(CSV_KEY),
+        readBlobText(META_KEY),
+      ]);
+
+      if (!csvText) return res.status(200).json({ exists: false });
 
       let meta = null;
-      try {
-        const r = await fetch(metaHead.url, { cache: 'no-store' });
-        if (r.ok) meta = await r.json();
-      } catch {}
-
-      const csvHead = await safeHead(CSV_KEY);
-      if (!csvHead) return res.status(200).json({ exists: false });
-
-      let csv = '';
-      try {
-        const r = await fetch(meta?.csvUrl || csvHead.url, { cache: 'no-store' });
-        if (r.ok) csv = await r.text();
-      } catch {}
-
-      if (!csv) return res.status(200).json({ exists: false });
+      if (metaText) { try { meta = JSON.parse(metaText); } catch {} }
 
       return res.status(200).json({
         exists: true,
         fileName:   meta?.fileName   || 'naver.csv',
         uploader:   meta?.uploader   || '',
         uploadedAt: meta?.uploadedAt || null,
-        bytes:      csv.length,
-        csv,
+        bytes:      csvText.length,
+        csv:        csvText,
       });
     }
 
     if (req.method === 'DELETE') {
+      // del() 은 pathname 또는 URL 을 받음 — private 에서는 pathname 직접 전달
       const results = await Promise.allSettled([
-        (async () => { const h = await safeHead(CSV_KEY);  if (h?.url) await del(h.url); })(),
-        (async () => { const h = await safeHead(META_KEY); if (h?.url) await del(h.url); })(),
+        del(CSV_KEY),
+        del(META_KEY),
       ]);
       return res.status(200).json({ ok: true, results: results.map(r => r.status) });
     }

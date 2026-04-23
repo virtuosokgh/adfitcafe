@@ -426,6 +426,10 @@
           <div class="card-label">총 노출수</div>
           <div class="card-value" id="google-total-impression">0</div>
         </div>
+        <div class="card" data-metric="request">
+          <div class="card-label">총 요청수</div>
+          <div class="card-value" id="google-total-request">0</div>
+        </div>
         <div class="card" data-metric="click">
           <div class="card-label">총 클릭수</div>
           <div class="card-value" id="google-total-click">0</div>
@@ -435,8 +439,12 @@
           <div class="card-value" id="google-total-ctr">0%</div>
         </div>
         <div class="card" data-metric="ecpm">
-          <div class="card-label">eCPM</div>
+          <div class="card-label">노출 eCPM</div>
           <div class="card-value" id="google-total-ecpm">0원</div>
+        </div>
+        <div class="card" data-metric="reqEcpm">
+          <div class="card-label">요청 eCPM</div>
+          <div class="card-value" id="google-total-req-ecpm">0원</div>
         </div>
       </div>
 
@@ -461,10 +469,12 @@
               <tr>
                 <th data-col="date">날짜<span class="sort-icon">↕</span></th>
                 <th data-col="adUnit">광고단위명<span class="sort-icon">↕</span></th>
+                <th data-col="request">요청수<span class="sort-icon">↕</span></th>
                 <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
                 <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
                 <th data-col="ctr">CTR<span class="sort-icon">↕</span></th>
-                <th data-col="ecpm">eCPM<span class="sort-icon">↕</span></th>
+                <th data-col="ecpm">노출 eCPM<span class="sort-icon">↕</span></th>
+                <th data-col="reqEcpm">요청 eCPM<span class="sort-icon">↕</span></th>
                 <th data-col="profit">수익<span class="sort-icon">↕</span></th>
                 <th data-col="profitPct">분포<span class="sort-icon">↕</span></th>
               </tr>
