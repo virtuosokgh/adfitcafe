@@ -59,10 +59,13 @@ const gTableBody = document.getElementById('google-result-body');
 const gChartH2   = document.getElementById('google-chart-title-h2');
 
 // ── 영구 캐시 (조회 결과를 reload 후에도 유지) ──────────
-const GOOGLE_CACHE_KEY = 'google_last_result_v1';
+//   v2: row 스키마에 `request`/`reqEcpm` 필드 추가 → 이전 캐시(v1) 는 폐기
+const GOOGLE_CACHE_KEY = 'google_last_result_v2';
 function googleSaveCache(payload) {
   try { localStorage.setItem(GOOGLE_CACHE_KEY, JSON.stringify(payload)); }
   catch { /* quota 초과 — 무시 */ }
+  // 구버전 캐시 정리
+  try { localStorage.removeItem('google_last_result_v1'); } catch {}
 }
 function googleLoadCache() {
   try {
@@ -71,6 +74,8 @@ function googleLoadCache() {
     return JSON.parse(raw);
   } catch { return null; }
 }
+// 페이지 로드 즉시 v1 정리 (이전 사용자 마이그레이션)
+try { localStorage.removeItem('google_last_result_v1'); } catch {}
 
 // ── flatpickr 초기화 (지연 실행: Google 탭 활성화 시) ──
 let gInited = false;
