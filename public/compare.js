@@ -1135,7 +1135,8 @@
     const map = new Map();
     for (const r of rows) {
       const key = `${r.platform}::${r.unit}`;
-      const prev = map.get(key) || { platform: r.platform, unit: r.unit, impression: 0, click: 0, profit: 0 };
+      const prev = map.get(key) || { platform: r.platform, unit: r.unit, request: 0, impression: 0, click: 0, profit: 0 };
+      prev.request    += (r.request || 0);
       prev.impression += r.impression;
       prev.click      += r.click;
       prev.profit     += r.profit;
@@ -1179,6 +1180,7 @@
         <td class="cmp-cell-platform">${badge(r.platform)}</td>
         <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
         <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
+        <td class="cmp-cell-num">${r.request > 0 ? num(r.request) : '-'}</td>
         <td class="cmp-cell-num">${num(r.impression)}</td>
         <td class="cmp-cell-num">${num(r.click)}</td>
         <td class="cmp-cell-num">${pct(r.ctr)}</td>
@@ -1194,10 +1196,11 @@
     const rows = applyUnitFilter(cmpRawRows);
     if (!rows.length) return;
     const platMap = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
-    const header = ['플랫폼','유닛명','날짜','노출수','클릭수','수익(원)'];
+    const header = ['플랫폼','유닛명','날짜','요청수','노출수','클릭수','수익(원)'];
     const lines = [header.join(',')];
     for (const r of rows) {
-      lines.push([platMap[r.platform], `"${r.unit}"`, r.date, r.impression, r.click, r.profit.toFixed(0)].join(','));
+      lines.push([platMap[r.platform], `"${r.unit}"`, r.date,
+                  r.request || 0, r.impression, r.click, r.profit.toFixed(0)].join(','));
     }
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');

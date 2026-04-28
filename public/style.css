@@ -1147,6 +1147,7 @@ tbody td:nth-child(3) { text-align: left; }
 #cmp-table col.cmp-col-platform   { width: 110px; }
 #cmp-table col.cmp-col-unit       { width: auto; }   /* 남는 공간 모두 차지 */
 #cmp-table col.cmp-col-profit     { width: 120px; }
+#cmp-table col.cmp-col-request    { width: 92px; }
 #cmp-table col.cmp-col-impression { width: 92px; }
 #cmp-table col.cmp-col-click      { width: 78px; }
 #cmp-table col.cmp-col-ctr        { width: 70px; }
