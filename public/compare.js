@@ -844,12 +844,19 @@
       errorEl.classList.remove('hidden');
       return;
     }
-    // MCS 옵션 채우기
+    // MCS 옵션 채우기 — 단, 아직 데이터가 도착하지 않은 플랫폼은 건너뛴다.
+    // (예: 구글 응답이 늦게 오는 경우, 카카오/네이버 먼저 그릴 때
+    //   `mcsG.refresh([])` 로 선택값이 모두 지워지는 버그 방지.)
     const uniqUnits = pred =>
       [...new Set(cmpRawRows.filter(pred).map(r => r.unit))].sort();
-    mcsK.refresh(uniqUnits(r => r.platform === 'kakao'));
-    mcsG.refresh(uniqUnits(r => r.platform === 'google'));
-    mcsN.refresh(uniqUnits(r => r.platform === 'naverSA' || r.platform === 'naverDA'));
+
+    const kUnits = uniqUnits(r => r.platform === 'kakao');
+    const gUnits = uniqUnits(r => r.platform === 'google');
+    const nUnits = uniqUnits(r => r.platform === 'naverSA' || r.platform === 'naverDA');
+
+    if (kUnits.length) mcsK.refresh(kUnits);
+    if (gUnits.length) mcsG.refresh(gUnits);
+    if (nUnits.length) mcsN.refresh(nUnits);
 
     renderAll();
     ['cmp-summary', 'cmp-charts', 'cmp-table-section'].forEach(id =>
