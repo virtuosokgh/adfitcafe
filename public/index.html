@@ -526,17 +526,6 @@
           <button type="button" id="cmp-naver-reset-btn" class="cmp-naver-reset-btn hidden">✕ 해제</button>
         </div>
 
-        <!-- 유닛 즐겨찾기 -->
-        <div class="cmp-fav-bar">
-          <label class="cmp-fav-label">⭐ 즐겨찾기</label>
-          <select id="cmp-fav-select" class="cmp-fav-select">
-            <option value="">— 즐겨찾기를 선택하세요 —</option>
-          </select>
-          <button id="cmp-fav-save-btn"   type="button" class="cmp-fav-btn cmp-fav-btn-save">💾 현재 선택 저장</button>
-          <button id="cmp-fav-rename-btn" type="button" class="cmp-fav-btn" disabled>✏️ 이름 변경</button>
-          <button id="cmp-fav-delete-btn" type="button" class="cmp-fav-btn cmp-fav-btn-danger" disabled>🗑 삭제</button>
-        </div>
-
         <!-- 플랫폼별 유닛 필터 -->
         <div class="filter-row">
           <div class="filter-area">
@@ -553,6 +542,26 @@
           </div>
           <button id="cmp-search-btn" class="search-btn">통합 조회</button>
         </div>
+
+        <!-- 유닛 즐겨찾기 (필터 아래, 한 줄로 컴팩트) -->
+        <div class="cmp-fav-bar">
+          <span class="cmp-fav-label">⭐ 즐겨찾기</span>
+          <div id="cmp-fav-dropdown" class="cmp-fav-dropdown">
+            <button id="cmp-fav-trigger" type="button" class="cmp-fav-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span id="cmp-fav-trigger-label" class="cmp-fav-trigger-label">— 선택 —</span>
+              <span class="cmp-fav-trigger-arrow">▾</span>
+            </button>
+            <div id="cmp-fav-menu" class="cmp-fav-menu hidden" role="listbox"></div>
+          </div>
+          <button id="cmp-fav-save-btn"   type="button" class="cmp-fav-btn cmp-fav-btn-save"   title="현재 유닛 선택을 즐겨찾기로 저장">💾 저장</button>
+          <button id="cmp-fav-rename-btn" type="button" class="cmp-fav-btn" disabled title="이름 변경">✏️</button>
+          <button id="cmp-fav-delete-btn" type="button" class="cmp-fav-btn cmp-fav-btn-danger" disabled title="삭제">🗑</button>
+        </div>
+
+        <!-- 즐겨찾기 hover 이미지 미리보기 (드롭다운 외부) -->
+        <div id="cmp-fav-hover-preview" class="cmp-fav-hover-preview hidden" aria-hidden="true">
+          <img alt="" />
+        </div>
       </div>
 
       <!-- 즐겨찾기 모달 (저장 / 이름변경) -->
@@ -561,8 +570,20 @@
         <div class="cmp-modal-dialog">
           <h3 id="cmp-fav-modal-title">유닛 즐겨찾기 저장</h3>
           <div class="cmp-fav-preview" id="cmp-fav-preview"></div>
-          <input id="cmp-fav-name-input" type="text" class="cmp-fav-name-input"
-                 placeholder="즐겨찾기 이름 (예: 카페 메인)" maxlength="40" autocomplete="off" />
+          <div class="cmp-fav-input-row">
+            <!-- 이미지 업로더 (선택사항) -->
+            <div class="cmp-fav-image-uploader">
+              <label for="cmp-fav-image-input" class="cmp-fav-image-label" title="이미지 추가 (선택사항)">
+                <span id="cmp-fav-image-placeholder" class="cmp-fav-image-placeholder">+</span>
+                <img id="cmp-fav-image-thumb" class="cmp-fav-image-thumb hidden" alt="미리보기" />
+              </label>
+              <input id="cmp-fav-image-input" type="file" accept="image/*" class="cmp-fav-image-input-hidden" />
+              <button id="cmp-fav-image-remove" type="button" class="cmp-fav-image-remove hidden" title="이미지 제거">✕</button>
+            </div>
+            <input id="cmp-fav-name-input" type="text" class="cmp-fav-name-input"
+                   placeholder="즐겨찾기 이름 (예: 카페 메인)" maxlength="40" autocomplete="off" />
+          </div>
+          <div class="cmp-fav-image-hint">이미지는 선택사항이에요. 드롭다운에서 마우스를 올리면 미리보기로 표시돼요.</div>
           <div class="cmp-modal-actions">
             <button id="cmp-fav-modal-cancel" type="button" class="cmp-modal-btn-cancel">취소</button>
             <button id="cmp-fav-modal-save"   type="button" class="cmp-modal-btn-primary">저장</button>

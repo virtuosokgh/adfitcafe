@@ -1283,12 +1283,22 @@
   // ────────────────────────────────────────────────
   // 유닛 선택 즐겨찾기
   //   저장 형식 (localStorage 키: cmp_unit_favorites_v1)
-  //     [{ id, name, kakao:[unitId,...], google:[unit,...], naver:[unit,...], createdAt, updatedAt }]
+  //     [{ id, name, kakao:[unitId,...], google:[unit,...], naver:[unit,...],
+  //        imageDataUrl?:"data:image/...", createdAt, updatedAt }]
   //   getSelected()=[] 는 "전체(필터 없음)" 의미로 그대로 저장 → 적용 시 [] 로 setSelected
+  //   imageDataUrl 은 선택값 — 있으면 드롭다운 hover 시 미리보기로 노출
+  //   이미지는 256×256 max, JPEG 0.85 로 자동 리사이즈하여 localStorage 사용량 제어
   // ────────────────────────────────────────────────
   const FAV_KEY = 'cmp_unit_favorites_v1';
   let favorites = [];
-  let suppressFavSelectChange = false; // applyFavorite 시 select 변경 콜백 억제용
+  let selectedFavId = '';                 // 현재 트리거에 표시 중인 즐겨찾기
+  let pendingImageDataUrl = null;         // 모달에서 임시 보관 (저장 시 fav.imageDataUrl 로 옮김)
+  let pendingImageOriginal = null;        // 편집 모드 진입 시 원본 보존 (취소 대비)
+  let suppressFavTriggerChange = false;   // applyFavorite 시 어긋남 처리 억제
+
+  function escHtml(s) {
+    return String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
   function loadFavorites() {
     try {
@@ -1298,32 +1308,109 @@
     } catch { return []; }
   }
   function persistFavorites() {
-    try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); } catch {}
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); }
+    catch (e) {
+      // localStorage quota 초과 가능성 — 사용자에게 알림
+      alert('즐겨찾기 저장 실패: 저장 공간이 부족합니다. 일부 이미지를 제거하거나 즐겨찾기를 삭제해 주세요.');
+      console.error('localStorage quota exceeded:', e);
+    }
   }
 
-  function renderFavSelect() {
-    const sel = document.getElementById('cmp-fav-select');
-    if (!sel) return;
-    const cur = sel.value;
-    const opts = ['<option value="">— 즐겨찾기를 선택하세요 —</option>'];
-    for (const f of favorites) {
-      // XSS 방어: 텍스트만 안전히 삽입
-      const safe = String(f.name).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-      opts.push(`<option value="${f.id}">${safe}</option>`);
-    }
-    sel.innerHTML = opts.join('');
-    sel.value = (cur && favorites.some(f => f.id === cur)) ? cur : '';
-    updateFavButtons();
+  // 트리거 라벨 갱신
+  function setTriggerLabel(text) {
+    const lab = document.getElementById('cmp-fav-trigger-label');
+    if (lab) lab.textContent = text || '— 선택 —';
   }
+
+  // 메뉴 항목 렌더
+  function renderFavMenu() {
+    const menu = document.getElementById('cmp-fav-menu');
+    if (!menu) return;
+    if (!favorites.length) {
+      menu.innerHTML = '<div class="cmp-fav-empty">저장된 즐겨찾기가 없어요.<br/>유닛을 선택하고 💾 저장을 눌러보세요.</div>';
+      return;
+    }
+    menu.innerHTML = favorites.map(f => {
+      const hasImg = !!f.imageDataUrl;
+      return `
+        <div class="cmp-fav-item${selectedFavId === f.id ? ' is-active' : ''}"
+             data-id="${escHtml(f.id)}"
+             data-has-image="${hasImg ? '1' : '0'}"
+             role="option" tabindex="0">
+          <span class="cmp-fav-item-name">${escHtml(f.name)}</span>
+          ${hasImg ? '<span class="cmp-fav-item-icon" title="이미지 있음">🖼</span>' : ''}
+        </div>`;
+    }).join('');
+  }
+
   function updateFavButtons() {
-    const sel = document.getElementById('cmp-fav-select');
-    const has = !!(sel && sel.value);
+    const has = !!selectedFavId;
     const rn = document.getElementById('cmp-fav-rename-btn');
     const dl = document.getElementById('cmp-fav-delete-btn');
     if (rn) rn.disabled = !has;
     if (dl) dl.disabled = !has;
   }
 
+  function setSelectedFav(id) {
+    selectedFavId = id || '';
+    if (selectedFavId) {
+      const fav = favorites.find(f => f.id === selectedFavId);
+      setTriggerLabel(fav?.name || '— 선택 —');
+    } else {
+      setTriggerLabel('— 선택 —');
+    }
+    renderFavMenu();
+    updateFavButtons();
+  }
+
+  // ─── 커스텀 드롭다운 ───
+  function openFavMenu() {
+    const menu = document.getElementById('cmp-fav-menu');
+    const trig = document.getElementById('cmp-fav-trigger');
+    if (!menu || !trig) return;
+    renderFavMenu();
+    menu.classList.remove('hidden');
+    trig.setAttribute('aria-expanded', 'true');
+  }
+  function closeFavMenu() {
+    document.getElementById('cmp-fav-menu')?.classList.add('hidden');
+    document.getElementById('cmp-fav-trigger')?.setAttribute('aria-expanded', 'false');
+    hideHoverPreview();
+  }
+  function isFavMenuOpen() {
+    const m = document.getElementById('cmp-fav-menu');
+    return m && !m.classList.contains('hidden');
+  }
+
+  // ─── 호버 이미지 프리뷰 ───
+  function showHoverPreview(itemEl) {
+    const id  = itemEl.dataset.id;
+    const fav = favorites.find(f => f.id === id);
+    if (!fav?.imageDataUrl) { hideHoverPreview(); return; }
+    const previewEl = document.getElementById('cmp-fav-hover-preview');
+    if (!previewEl) return;
+    const imgEl = previewEl.querySelector('img');
+    imgEl.src = fav.imageDataUrl;
+
+    // 위치: 메뉴의 우측 (화면 우측 넘어가면 좌측), 항목 수직 중앙
+    const rect = itemEl.getBoundingClientRect();
+    previewEl.classList.remove('hidden');
+    // render 후 실제 크기 계산
+    const pw = previewEl.offsetWidth || 260;
+    const ph = previewEl.offsetHeight || 200;
+    let left = rect.right + 10;
+    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
+    let top = rect.top + rect.height / 2 - ph / 2;
+    if (top < 8) top = 8;
+    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+    previewEl.style.left = `${Math.max(8, left)}px`;
+    previewEl.style.top  = `${top}px`;
+  }
+  function hideHoverPreview() {
+    document.getElementById('cmp-fav-hover-preview')?.classList.add('hidden');
+  }
+
+  // ─── 모달 ───
   function buildPreviewText() {
     const k = mcsK ? mcsK.getSelected().length : 0;
     const g = mcsG ? mcsG.getSelected().length : 0;
@@ -1336,11 +1423,59 @@
     return `현재 선택: <strong>${part('🟡 카카오', k, mcsK)} · ${part('🔵 구글', g, mcsG)} · ${part('🟢 네이버', n, mcsN)}</strong>`;
   }
 
+  function setModalImage(dataUrl) {
+    pendingImageDataUrl = dataUrl || null;
+    const thumb = document.getElementById('cmp-fav-image-thumb');
+    const ph    = document.getElementById('cmp-fav-image-placeholder');
+    const rm    = document.getElementById('cmp-fav-image-remove');
+    if (pendingImageDataUrl) {
+      thumb.src = pendingImageDataUrl;
+      thumb.classList.remove('hidden');
+      ph.classList.add('hidden');
+      rm.classList.remove('hidden');
+    } else {
+      thumb.removeAttribute('src');
+      thumb.classList.add('hidden');
+      ph.classList.remove('hidden');
+      rm.classList.add('hidden');
+    }
+  }
+
+  // 이미지 파일 → 256×256 안쪽 JPEG dataURL 로 변환
+  function readImageAsResizedDataUrl(file, maxSize = 256, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\//i.test(file.type)) { reject(new Error('이미지 파일이 아닙니다.')); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
+          const w = Math.max(1, Math.round(img.width * ratio));
+          const h = Math.max(1, Math.round(img.height * ratio));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          // PNG 입력은 투명도 보존이 필요하면 PNG, 일반은 JPEG
+          const out = file.type === 'image/png'
+            ? canvas.toDataURL('image/png')
+            : canvas.toDataURL('image/jpeg', quality);
+          resolve(out);
+        };
+        img.onerror = () => reject(new Error('이미지를 읽을 수 없습니다.'));
+        img.src = reader.result;
+      };
+      reader.onerror = () => reject(new Error('파일 읽기 실패'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   function openFavModal({ mode, fav }) {
     const modal     = document.getElementById('cmp-fav-modal');
     const titleEl   = document.getElementById('cmp-fav-modal-title');
     const previewEl = document.getElementById('cmp-fav-preview');
     const inputEl   = document.getElementById('cmp-fav-name-input');
+    const fileInput = document.getElementById('cmp-fav-image-input');
     if (!modal) return;
 
     modal.dataset.mode  = mode;
@@ -1351,18 +1486,26 @@
       previewEl.innerHTML = buildPreviewText();
       inputEl.value = '';
       inputEl.placeholder = '즐겨찾기 이름 (예: 카페 메인)';
+      pendingImageOriginal = null;
+      setModalImage(null);
     } else if (mode === 'rename') {
-      titleEl.textContent = '즐겨찾기 이름 변경';
-      previewEl.innerHTML = `<strong>${fav.name}</strong> 의 새 이름을 입력하세요.`;
+      titleEl.textContent = '즐겨찾기 편집';
+      previewEl.innerHTML = `<strong>${escHtml(fav.name)}</strong> · 이름과 이미지를 변경할 수 있어요.`;
       inputEl.value = fav.name;
       inputEl.placeholder = '새 이름';
+      pendingImageOriginal = fav.imageDataUrl || null;
+      setModalImage(pendingImageOriginal);
     }
+    if (fileInput) fileInput.value = '';      // 같은 파일 재선택 가능하도록
     modal.classList.remove('hidden');
     setTimeout(() => { inputEl.focus(); inputEl.select(); }, 0);
   }
   function closeFavModal() {
     document.getElementById('cmp-fav-modal')?.classList.add('hidden');
+    pendingImageDataUrl = null;
+    pendingImageOriginal = null;
   }
+
   function confirmFavModal() {
     const modal   = document.getElementById('cmp-fav-modal');
     const inputEl = document.getElementById('cmp-fav-name-input');
@@ -1380,27 +1523,24 @@
         kakao:     mcsK ? mcsK.getSelected() : [],
         google:    mcsG ? mcsG.getSelected() : [],
         naver:     mcsN ? mcsN.getSelected() : [],
+        imageDataUrl: pendingImageDataUrl || null,
         createdAt: exists?.createdAt || Date.now(),
         updatedAt: Date.now(),
       };
       if (exists) favorites = favorites.map(f => f.id === exists.id ? newFav : f);
       else        favorites = [...favorites, newFav];
       persistFavorites();
-      renderFavSelect();
-      const sel = document.getElementById('cmp-fav-select');
-      if (sel) { sel.value = newFav.id; updateFavButtons(); }
+      setSelectedFav(newFav.id);
     } else if (mode === 'rename') {
       const id = modal.dataset.favId;
-      // 같은 이름 중복 방지 (자기 자신 제외)
       if (favorites.some(f => f.id !== id && f.name === name)) {
         if (!confirm(`"${name}" 이름의 다른 즐겨찾기가 이미 있습니다. 그대로 저장할까요?`)) return;
       }
-      favorites = favorites.map(f => f.id === id ? { ...f, name, updatedAt: Date.now() } : f);
+      favorites = favorites.map(f => f.id === id
+        ? { ...f, name, imageDataUrl: pendingImageDataUrl || null, updatedAt: Date.now() }
+        : f);
       persistFavorites();
-      renderFavSelect();
-      const sel = document.getElementById('cmp-fav-select');
-      if (sel) sel.value = id;
-      updateFavButtons();
+      setSelectedFav(id);
     }
     closeFavModal();
   }
@@ -1408,70 +1548,97 @@
   function applyFavorite(id) {
     const fav = favorites.find(f => f.id === id);
     if (!fav) return;
-    // setSelected 는 onChange 콜백을 호출하지 않으므로 수동으로 renderAll 한 번 호출
+    suppressFavTriggerChange = true;
     if (mcsK) mcsK.setSelected(Array.isArray(fav.kakao)  ? fav.kakao  : []);
     if (mcsG) mcsG.setSelected(Array.isArray(fav.google) ? fav.google : []);
     if (mcsN) mcsN.setSelected(Array.isArray(fav.naver)  ? fav.naver  : []);
+    suppressFavTriggerChange = false;
+    setSelectedFav(id);
     if (cmpRawRows.length) renderAll();
   }
 
-  // 사용자가 MCS 직접 조작 시 호출됨 (선택값과 즐겨찾기 내용이 어긋나면 dropdown 비움)
+  // 사용자가 MCS 직접 조작 시 (즐겨찾기 ↔ 실제 선택 어긋남 → 트리거 비움)
   function onMcsChanged() {
-    if (suppressFavSelectChange) return;
-    const sel = document.getElementById('cmp-fav-select');
-    if (sel && sel.value) { sel.value = ''; updateFavButtons(); }
+    if (suppressFavTriggerChange) return;
+    if (selectedFavId) setSelectedFav('');
   }
 
   function setupFavorites() {
     favorites = loadFavorites();
-    renderFavSelect();
+    setSelectedFav('');
 
-    document.getElementById('cmp-fav-save-btn')
-      ?.addEventListener('click', () => openFavModal({ mode: 'save' }));
+    // 트리거 토글
+    document.getElementById('cmp-fav-trigger')?.addEventListener('click', e => {
+      e.stopPropagation();
+      if (isFavMenuOpen()) closeFavMenu();
+      else openFavMenu();
+    });
 
-    document.getElementById('cmp-fav-rename-btn')
-      ?.addEventListener('click', () => {
-        const id = document.getElementById('cmp-fav-select')?.value;
-        const fav = favorites.find(f => f.id === id);
-        if (fav) openFavModal({ mode: 'rename', fav });
+    // 메뉴 항목 클릭 / 호버
+    const menu = document.getElementById('cmp-fav-menu');
+    if (menu) {
+      menu.addEventListener('click', e => {
+        const item = e.target.closest('.cmp-fav-item');
+        if (!item) return;
+        applyFavorite(item.dataset.id);
+        closeFavMenu();
       });
-
-    document.getElementById('cmp-fav-delete-btn')
-      ?.addEventListener('click', () => {
-        const sel = document.getElementById('cmp-fav-select');
-        const id = sel?.value;
-        const fav = favorites.find(f => f.id === id);
-        if (!fav) return;
-        if (!confirm(`"${fav.name}" 즐겨찾기를 삭제할까요?`)) return;
-        favorites = favorites.filter(f => f.id !== id);
-        persistFavorites();
-        renderFavSelect();
-        if (sel) sel.value = '';
-        updateFavButtons();
+      menu.addEventListener('mouseover', e => {
+        const item = e.target.closest('.cmp-fav-item');
+        if (!item) return;
+        if (item.dataset.hasImage === '1') showHoverPreview(item);
+        else hideHoverPreview();
       });
+      menu.addEventListener('mouseleave', hideHoverPreview);
+    }
 
-    document.getElementById('cmp-fav-select')
-      ?.addEventListener('change', e => {
-        const id = e.target.value;
-        if (id) {
-          // applyFavorite 가 mcs.setSelected 를 호출하지만 그건 onChange 안 부르므로
-          // suppress 플래그는 사실상 불필요하지만 방어적으로 둠.
-          suppressFavSelectChange = true;
-          applyFavorite(id);
-          suppressFavSelectChange = false;
-        }
-        updateFavButtons();
-      });
+    // 외부 클릭 → 메뉴 닫기
+    document.addEventListener('click', e => {
+      if (!isFavMenuOpen()) return;
+      if (e.target.closest('#cmp-fav-dropdown')) return;
+      closeFavMenu();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && isFavMenuOpen()) closeFavMenu();
+    });
+
+    // 액션 버튼
+    document.getElementById('cmp-fav-save-btn')?.addEventListener('click', () => openFavModal({ mode: 'save' }));
+    document.getElementById('cmp-fav-rename-btn')?.addEventListener('click', () => {
+      const fav = favorites.find(f => f.id === selectedFavId);
+      if (fav) openFavModal({ mode: 'rename', fav });
+    });
+    document.getElementById('cmp-fav-delete-btn')?.addEventListener('click', () => {
+      const fav = favorites.find(f => f.id === selectedFavId);
+      if (!fav) return;
+      if (!confirm(`"${fav.name}" 즐겨찾기를 삭제할까요?`)) return;
+      favorites = favorites.filter(f => f.id !== selectedFavId);
+      persistFavorites();
+      setSelectedFav('');
+    });
 
     // 모달 인터랙션
     document.getElementById('cmp-fav-modal-cancel')?.addEventListener('click', closeFavModal);
     document.getElementById('cmp-fav-modal-save')  ?.addEventListener('click', confirmFavModal);
-    document.querySelector('#cmp-fav-modal .cmp-modal-backdrop')
-      ?.addEventListener('click', closeFavModal);
+    document.querySelector('#cmp-fav-modal .cmp-modal-backdrop')?.addEventListener('click', closeFavModal);
     document.getElementById('cmp-fav-name-input')?.addEventListener('keydown', e => {
       if (e.key === 'Enter')  { e.preventDefault(); confirmFavModal(); }
       if (e.key === 'Escape') { e.preventDefault(); closeFavModal(); }
     });
+
+    // 이미지 업로드 / 제거
+    document.getElementById('cmp-fav-image-input')?.addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const dataUrl = await readImageAsResizedDataUrl(file);
+        setModalImage(dataUrl);
+      } catch (err) {
+        alert(err.message || '이미지를 처리할 수 없습니다.');
+      }
+      e.target.value = '';   // 같은 파일 재선택 가능
+    });
+    document.getElementById('cmp-fav-image-remove')?.addEventListener('click', () => setModalImage(null));
   }
 
 })();
