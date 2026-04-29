@@ -1287,7 +1287,8 @@
   //        imageDataUrl?:"data:image/...", createdAt, updatedAt }]
   //   getSelected()=[] 는 "전체(필터 없음)" 의미로 그대로 저장 → 적용 시 [] 로 setSelected
   //   imageDataUrl 은 선택값 — 있으면 드롭다운 hover 시 미리보기로 노출
-  //   이미지는 256×256 max, JPEG 0.85 로 자동 리사이즈하여 localStorage 사용량 제어
+  //   이미지는 768×768 max, JPEG 0.85 로 자동 리사이즈하여 localStorage 사용량 제어
+  //   (프리뷰 최대 560px 에서 또렷하게 보이도록 충분히 큰 사이즈 유지)
   // ────────────────────────────────────────────────
   const FAV_KEY = 'cmp_unit_favorites_v1';
   let favorites = [];
@@ -1441,8 +1442,10 @@
     }
   }
 
-  // 이미지 파일 → 256×256 안쪽 JPEG dataURL 로 변환
-  function readImageAsResizedDataUrl(file, maxSize = 256, quality = 0.85) {
+  // 이미지 파일 → 768×768 안쪽 JPEG dataURL 로 변환
+  // (호버 프리뷰 최대 560px 에서도 또렷하도록 충분히 크게,
+  //  하지만 localStorage 점유는 합리적 수준 ~80~200KB/장)
+  function readImageAsResizedDataUrl(file, maxSize = 768, quality = 0.85) {
     return new Promise((resolve, reject) => {
       if (!/^image\//i.test(file.type)) { reject(new Error('이미지 파일이 아닙니다.')); return; }
       const reader = new FileReader();

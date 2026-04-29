@@ -1380,10 +1380,13 @@ tbody td:nth-child(3) { text-align: left; }
 
 /* ───────────────────────────────────────────────
  * 유닛 즐겨찾기 바 (컴팩트, 한 줄)
+ *   주의: overflow 를 절대 걸지 않는다. 걸면 드롭다운/프리뷰가
+ *   바 영역 안에서 잘리거나 스크롤이 생긴다 (광고 유닛 MCS 와 동일하게
+ *   페이지 흐름 위로 자연스럽게 떠올라야 함).
  * ─────────────────────────────────────────────── */
 .cmp-fav-bar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;           /* 좁으면 줄바꿈 (overflow 대신) */
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -1391,7 +1394,9 @@ tbody td:nth-child(3) { text-align: left; }
   border: 1px solid #FDE68A;
   border-radius: 8px;
   margin-top: 12px;
-  overflow-x: auto;          /* 화면 좁으면 가로 스크롤 (높이 안 늘어나게) */
+  width: 100%;               /* .controls flex 컨테이너 내에서 한 줄 차지 */
+  box-sizing: border-box;
+  overflow: visible;         /* ← 드롭다운/프리뷰가 자유롭게 빠져나갈 수 있도록 */
 }
 .cmp-fav-label {
   font-weight: 600;
@@ -1448,7 +1453,7 @@ tbody td:nth-child(3) { text-align: left; }
   border: 1px solid #FCD34D;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  z-index: 200;
+  z-index: 2000;             /* MCS dropdown 과 동일 (2000) — 다른 컨텐츠 위로 */
   padding: 4px;
 }
 .cmp-fav-menu.hidden { display: none; }
@@ -1484,23 +1489,24 @@ tbody td:nth-child(3) { text-align: left; }
   text-align: center;
 }
 
-/* 호버 이미지 프리뷰 */
+/* 호버 이미지 프리뷰 — 페이지 전체에 떠 있는 fixed 패널 */
 .cmp-fav-hover-preview {
   position: fixed;
-  z-index: 250;
+  z-index: 1500;             /* 모달(1000)·사이드 컨텐츠 위로 */
   background: #fff;
   border: 1px solid #FCD34D;
-  border-radius: 10px;
-  padding: 6px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.22);
   pointer-events: none;
 }
 .cmp-fav-hover-preview.hidden { display: none; }
 .cmp-fav-hover-preview img {
   display: block;
-  max-width: 240px;
-  max-height: 240px;
-  border-radius: 6px;
+  /* 화면 크기에 맞춰 스케일링 — 너무 작아 보이지 않도록 충분히 크게 */
+  max-width: min(70vw, 560px);
+  max-height: min(70vh, 560px);
+  border-radius: 8px;
   object-fit: contain;
   background: #F9FAFB;
 }
