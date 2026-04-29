@@ -1286,9 +1286,9 @@
   //     [{ id, name, kakao:[unitId,...], google:[unit,...], naver:[unit,...],
   //        imageDataUrl?:"data:image/...", createdAt, updatedAt }]
   //   getSelected()=[] 는 "전체(필터 없음)" 의미로 그대로 저장 → 적용 시 [] 로 setSelected
-  //   imageDataUrl 은 선택값 — 있으면 드롭다운 hover 시 미리보기로 노출
-  //   이미지는 768×768 max, JPEG 0.85 로 자동 리사이즈하여 localStorage 사용량 제어
-  //   (프리뷰 최대 560px 에서 또렷하게 보이도록 충분히 큰 사이즈 유지)
+  //   imageDataUrl 은 선택값 — 있으면 드롭다운 hover 시 미리보기로 원본크기 노출
+  //   이미지는 리사이즈/재인코딩 없이 원본 그대로 dataURL 저장 (FileReader)
+  //   단 localStorage 5MB 한계 때문에 raw 2MB 이상이면 사용자에게 경고
   // ────────────────────────────────────────────────
   const FAV_KEY = 'cmp_unit_favorites_v1';
   let favorites = [];
@@ -1391,21 +1391,36 @@
     const previewEl = document.getElementById('cmp-fav-hover-preview');
     if (!previewEl) return;
     const imgEl = previewEl.querySelector('img');
-    imgEl.src = fav.imageDataUrl;
 
-    // 위치: 메뉴의 우측 (화면 우측 넘어가면 좌측), 항목 수직 중앙
-    const rect = itemEl.getBoundingClientRect();
+    const positionPreview = () => {
+      const rect = itemEl.getBoundingClientRect();
+      const pw = previewEl.offsetWidth  || 260;
+      const ph = previewEl.offsetHeight || 200;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // 가로: 우측 우선 → 좌측 → 둘 다 안 되면 viewport 중앙
+      let left = rect.right + 10;
+      if (left + pw > vw - 8) {
+        const leftAlt = rect.left - pw - 10;
+        if (leftAlt >= 8) left = leftAlt;
+        else left = Math.max(8, (vw - pw) / 2);
+      }
+
+      // 세로: 항목 중앙 정렬, 화면 안으로 클램프
+      let top = rect.top + rect.height / 2 - ph / 2;
+      top = Math.max(8, Math.min(vh - ph - 8, top));
+
+      previewEl.style.left = `${left}px`;
+      previewEl.style.top  = `${top}px`;
+    };
+
+    // 이미지가 새로 로드되면 정확한 자연 크기로 재배치
+    imgEl.onload = positionPreview;
+    imgEl.src = fav.imageDataUrl;
     previewEl.classList.remove('hidden');
-    // render 후 실제 크기 계산
-    const pw = previewEl.offsetWidth || 260;
-    const ph = previewEl.offsetHeight || 200;
-    let left = rect.right + 10;
-    if (left + pw > window.innerWidth - 8) left = rect.left - pw - 10;
-    let top = rect.top + rect.height / 2 - ph / 2;
-    if (top < 8) top = 8;
-    if (top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
-    previewEl.style.left = `${Math.max(8, left)}px`;
-    previewEl.style.top  = `${top}px`;
+    // 캐시되어 있다면 즉시 위치 잡기 (onload 가 동기적으로 안 먹는 경우 대비)
+    positionPreview();
   }
   function hideHoverPreview() {
     document.getElementById('cmp-fav-hover-preview')?.classList.add('hidden');
@@ -1442,32 +1457,26 @@
     }
   }
 
-  // 이미지 파일 → 768×768 안쪽 JPEG dataURL 로 변환
-  // (호버 프리뷰 최대 560px 에서도 또렷하도록 충분히 크게,
-  //  하지만 localStorage 점유는 합리적 수준 ~80~200KB/장)
-  function readImageAsResizedDataUrl(file, maxSize = 768, quality = 0.85) {
+  // 이미지 파일 → 원본 그대로 dataURL 로 변환 (리사이즈/재인코딩 없음)
+  // localStorage 한계(약 5MB) 때문에 raw 파일이 큰 경우 사용자 confirm
+  function readImageAsDataUrl(file) {
     return new Promise((resolve, reject) => {
-      if (!/^image\//i.test(file.type)) { reject(new Error('이미지 파일이 아닙니다.')); return; }
+      if (!/^image\//i.test(file.type)) {
+        reject(new Error('이미지 파일이 아닙니다.'));
+        return;
+      }
+      // raw 2MB 초과 시 경고 (base64 는 약 1.33배 → 2.7MB)
+      if (file.size > 2 * 1024 * 1024) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        const ok = confirm(
+          `이미지 크기가 ${sizeMB}MB 입니다.\n` +
+          `브라우저 저장공간(localStorage 약 5MB) 한계에 가까워질 수 있어요.\n` +
+          `그래도 원본 그대로 저장할까요?`
+        );
+        if (!ok) { reject(new Error('cancelled')); return; }
+      }
       const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
-          const w = Math.max(1, Math.round(img.width * ratio));
-          const h = Math.max(1, Math.round(img.height * ratio));
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          // PNG 입력은 투명도 보존이 필요하면 PNG, 일반은 JPEG
-          const out = file.type === 'image/png'
-            ? canvas.toDataURL('image/png')
-            : canvas.toDataURL('image/jpeg', quality);
-          resolve(out);
-        };
-        img.onerror = () => reject(new Error('이미지를 읽을 수 없습니다.'));
-        img.src = reader.result;
-      };
+      reader.onload  = () => resolve(reader.result);
       reader.onerror = () => reject(new Error('파일 읽기 실패'));
       reader.readAsDataURL(file);
     });
@@ -1634,10 +1643,13 @@
       const file = e.target.files?.[0];
       if (!file) return;
       try {
-        const dataUrl = await readImageAsResizedDataUrl(file);
+        const dataUrl = await readImageAsDataUrl(file);
         setModalImage(dataUrl);
       } catch (err) {
-        alert(err.message || '이미지를 처리할 수 없습니다.');
+        // 사용자 취소(confirm 거절)는 조용히 무시
+        if (err.message !== 'cancelled') {
+          alert(err.message || '이미지를 처리할 수 없습니다.');
+        }
       }
       e.target.value = '';   // 같은 파일 재선택 가능
     });
