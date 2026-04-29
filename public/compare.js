@@ -1327,11 +1327,21 @@
   function renderFavMenu() {
     const menu = document.getElementById('cmp-fav-menu');
     if (!menu) return;
+    // 항상 "선택 해제" 가 맨 위 (즐겨찾기 + 모든 MCS 필터를 초기화)
+    const clearItem = `
+      <div class="cmp-fav-item cmp-fav-item-clear"
+           data-id="__clear__"
+           role="option" tabindex="0"
+           title="즐겨찾기 선택과 카카오/구글/네이버 유닛 필터를 모두 해제합니다">
+        <span class="cmp-fav-item-name">↺ 선택 해제 (전체 보기)</span>
+      </div>`;
+
     if (!favorites.length) {
-      menu.innerHTML = '<div class="cmp-fav-empty">저장된 즐겨찾기가 없어요.<br/>유닛을 선택하고 💾 저장을 눌러보세요.</div>';
+      menu.innerHTML = clearItem +
+        '<div class="cmp-fav-empty">저장된 즐겨찾기가 없어요.<br/>유닛을 선택하고 💾 저장을 눌러보세요.</div>';
       return;
     }
-    menu.innerHTML = favorites.map(f => {
+    const items = favorites.map(f => {
       const hasImg = !!f.imageDataUrl;
       return `
         <div class="cmp-fav-item${selectedFavId === f.id ? ' is-active' : ''}"
@@ -1342,6 +1352,18 @@
           ${hasImg ? '<span class="cmp-fav-item-icon" title="이미지 있음">🖼</span>' : ''}
         </div>`;
     }).join('');
+    menu.innerHTML = clearItem + items;
+  }
+
+  // 즐겨찾기 + 모든 MCS 필터 초기화 (전체 보기)
+  function clearAllSelections() {
+    suppressFavTriggerChange = true;
+    if (mcsK) mcsK.setSelected([]);
+    if (mcsG) mcsG.setSelected([]);
+    if (mcsN) mcsN.setSelected([]);
+    suppressFavTriggerChange = false;
+    setSelectedFav('');
+    if (cmpRawRows.length) renderAll();
   }
 
   function updateFavButtons() {
@@ -1592,7 +1614,9 @@
       menu.addEventListener('click', e => {
         const item = e.target.closest('.cmp-fav-item');
         if (!item) return;
-        applyFavorite(item.dataset.id);
+        const id = item.dataset.id;
+        if (id === '__clear__') clearAllSelections();
+        else                    applyFavorite(id);
         closeFavMenu();
       });
       menu.addEventListener('mouseover', e => {

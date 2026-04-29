@@ -1475,6 +1475,16 @@ tbody td:nth-child(3) { text-align: left; }
 }
 .cmp-fav-item:hover,
 .cmp-fav-item.is-active { background: #FEF3C7; }
+
+/* "선택 해제" 항목 — 살짝 옅은 회색 + 아래 구분선 */
+.cmp-fav-item-clear {
+  color: #6B7280;
+  border-bottom: 1px solid #FDE68A;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+.cmp-fav-item-clear:hover { background: #F3F4F6; color: #1F2937; }
+.cmp-fav-item-clear .cmp-fav-item-name { font-size: 12.5px; }
 .cmp-fav-item-name {
   flex: 1;
   overflow: hidden;
