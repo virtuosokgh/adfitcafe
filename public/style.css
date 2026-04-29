@@ -667,8 +667,13 @@ tbody td:nth-child(3) { text-align: left; }
   padding: 20px;
   box-shadow: var(--shadow);
 }
-#profit-chart {
-  max-height: 300px;
+/* Chart.js 무한 성장 방지: maintainAspectRatio:false 인 차트는
+   canvas 에 max-height 가 없으면 부모 div ↔ canvas 사이에 피드백 루프가
+   생겨 그래프가 계속 아래로 커진다. 모든 단일 차트에 cap 을 건다. */
+#profit-chart,
+#google-profit-chart,
+#naver-profit-chart {
+  max-height: 380px;
 }
 
 /* =========================================
