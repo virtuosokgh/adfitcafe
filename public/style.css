@@ -1377,3 +1377,148 @@ tbody td:nth-child(3) { text-align: left; }
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
   40%           { transform: scale(1.2); opacity: 1; }
 }
+
+/* ───────────────────────────────────────────────
+ * 유닛 즐겨찾기 바
+ * ─────────────────────────────────────────────── */
+.cmp-fav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+.cmp-fav-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #92400E;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.cmp-fav-select {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid #FCD34D;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  color: #1F2937;
+}
+.cmp-fav-select:focus {
+  outline: none;
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.15);
+}
+.cmp-fav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid #FCD34D;
+  border-radius: 8px;
+  color: #92400E;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.cmp-fav-btn:hover:not(:disabled)        { background: #FEF3C7; }
+.cmp-fav-btn:disabled                    { opacity: .4; cursor: not-allowed; }
+.cmp-fav-btn-save                        { background: #F59E0B; color: #fff; border-color: #F59E0B; }
+.cmp-fav-btn-save:hover:not(:disabled)   { background: #D97706; border-color: #D97706; }
+.cmp-fav-btn-danger                      { color: #B91C1C; border-color: #FCA5A5; }
+.cmp-fav-btn-danger:hover:not(:disabled) { background: #FEE2E2; }
+
+/* ───────────────────────────────────────────────
+ * 즐겨찾기 모달
+ * ─────────────────────────────────────────────── */
+.cmp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cmp-modal.hidden { display: none; }
+.cmp-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  animation: cmp-modal-fade .15s ease;
+}
+.cmp-modal-dialog {
+  position: relative;
+  background: #fff;
+  border-radius: 14px;
+  padding: 22px 24px;
+  min-width: 360px;
+  max-width: 92vw;
+  box-shadow: 0 20px 48px rgba(0,0,0,0.25);
+  animation: cmp-modal-pop .18s ease;
+}
+.cmp-modal-dialog h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+.cmp-fav-preview {
+  background: #F3F4F6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #4B5563;
+  line-height: 1.5;
+}
+.cmp-fav-preview strong { color: #111827; }
+.cmp-fav-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+}
+.cmp-fav-name-input:focus {
+  outline: none;
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
+}
+.cmp-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+.cmp-modal-btn-cancel,
+.cmp-modal-btn-primary {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.cmp-modal-btn-cancel  { background: #fff; color: #4B5563; border-color: #D1D5DB; }
+.cmp-modal-btn-cancel:hover  { background: #F3F4F6; }
+.cmp-modal-btn-primary { background: #F59E0B; color: #fff; }
+.cmp-modal-btn-primary:hover { background: #D97706; }
+
+@keyframes cmp-modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cmp-modal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}

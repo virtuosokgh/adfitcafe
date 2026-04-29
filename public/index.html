@@ -526,6 +526,17 @@
           <button type="button" id="cmp-naver-reset-btn" class="cmp-naver-reset-btn hidden">✕ 해제</button>
         </div>
 
+        <!-- 유닛 즐겨찾기 -->
+        <div class="cmp-fav-bar">
+          <label class="cmp-fav-label">⭐ 즐겨찾기</label>
+          <select id="cmp-fav-select" class="cmp-fav-select">
+            <option value="">— 즐겨찾기를 선택하세요 —</option>
+          </select>
+          <button id="cmp-fav-save-btn"   type="button" class="cmp-fav-btn cmp-fav-btn-save">💾 현재 선택 저장</button>
+          <button id="cmp-fav-rename-btn" type="button" class="cmp-fav-btn" disabled>✏️ 이름 변경</button>
+          <button id="cmp-fav-delete-btn" type="button" class="cmp-fav-btn cmp-fav-btn-danger" disabled>🗑 삭제</button>
+        </div>
+
         <!-- 플랫폼별 유닛 필터 -->
         <div class="filter-row">
           <div class="filter-area">
@@ -541,6 +552,21 @@
             <div id="cmp-mcs-naver"></div>
           </div>
           <button id="cmp-search-btn" class="search-btn">통합 조회</button>
+        </div>
+      </div>
+
+      <!-- 즐겨찾기 모달 (저장 / 이름변경) -->
+      <div id="cmp-fav-modal" class="cmp-modal hidden" role="dialog" aria-modal="true" aria-labelledby="cmp-fav-modal-title">
+        <div class="cmp-modal-backdrop"></div>
+        <div class="cmp-modal-dialog">
+          <h3 id="cmp-fav-modal-title">유닛 즐겨찾기 저장</h3>
+          <div class="cmp-fav-preview" id="cmp-fav-preview"></div>
+          <input id="cmp-fav-name-input" type="text" class="cmp-fav-name-input"
+                 placeholder="즐겨찾기 이름 (예: 카페 메인)" maxlength="40" autocomplete="off" />
+          <div class="cmp-modal-actions">
+            <button id="cmp-fav-modal-cancel" type="button" class="cmp-modal-btn-cancel">취소</button>
+            <button id="cmp-fav-modal-save"   type="button" class="cmp-modal-btn-primary">저장</button>
+          </div>
         </div>
       </div>
 

@@ -119,9 +119,12 @@
     });
 
     // MCS 초기화 (빈 상태)
-    mcsK = new MultiCheckSelect(document.getElementById('cmp-mcs-kakao'),  '전체 카카오 유닛', () => renderAll());
-    mcsG = new MultiCheckSelect(document.getElementById('cmp-mcs-google'), '전체 구글 유닛',   () => renderAll());
-    mcsN = new MultiCheckSelect(document.getElementById('cmp-mcs-naver'),  '전체 네이버 유닛', () => renderAll());
+    mcsK = new MultiCheckSelect(document.getElementById('cmp-mcs-kakao'),  '전체 카카오 유닛', () => { onMcsChanged(); renderAll(); });
+    mcsG = new MultiCheckSelect(document.getElementById('cmp-mcs-google'), '전체 구글 유닛',   () => { onMcsChanged(); renderAll(); });
+    mcsN = new MultiCheckSelect(document.getElementById('cmp-mcs-naver'),  '전체 네이버 유닛', () => { onMcsChanged(); renderAll(); });
+
+    // 유닛 즐겨찾기 (저장/불러오기/이름변경/삭제)
+    setupFavorites();
 
     // 업로드 버튼
     const fileInput = document.getElementById('cmp-naver-csv');
@@ -1276,5 +1279,199 @@
     console.table(out);
     return { totalSA, totalDA, totalOther, rows: out };
   };
+
+  // ────────────────────────────────────────────────
+  // 유닛 선택 즐겨찾기
+  //   저장 형식 (localStorage 키: cmp_unit_favorites_v1)
+  //     [{ id, name, kakao:[unitId,...], google:[unit,...], naver:[unit,...], createdAt, updatedAt }]
+  //   getSelected()=[] 는 "전체(필터 없음)" 의미로 그대로 저장 → 적용 시 [] 로 setSelected
+  // ────────────────────────────────────────────────
+  const FAV_KEY = 'cmp_unit_favorites_v1';
+  let favorites = [];
+  let suppressFavSelectChange = false; // applyFavorite 시 select 변경 콜백 억제용
+
+  function loadFavorites() {
+    try {
+      const raw = localStorage.getItem(FAV_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  function persistFavorites() {
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); } catch {}
+  }
+
+  function renderFavSelect() {
+    const sel = document.getElementById('cmp-fav-select');
+    if (!sel) return;
+    const cur = sel.value;
+    const opts = ['<option value="">— 즐겨찾기를 선택하세요 —</option>'];
+    for (const f of favorites) {
+      // XSS 방어: 텍스트만 안전히 삽입
+      const safe = String(f.name).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      opts.push(`<option value="${f.id}">${safe}</option>`);
+    }
+    sel.innerHTML = opts.join('');
+    sel.value = (cur && favorites.some(f => f.id === cur)) ? cur : '';
+    updateFavButtons();
+  }
+  function updateFavButtons() {
+    const sel = document.getElementById('cmp-fav-select');
+    const has = !!(sel && sel.value);
+    const rn = document.getElementById('cmp-fav-rename-btn');
+    const dl = document.getElementById('cmp-fav-delete-btn');
+    if (rn) rn.disabled = !has;
+    if (dl) dl.disabled = !has;
+  }
+
+  function buildPreviewText() {
+    const k = mcsK ? mcsK.getSelected().length : 0;
+    const g = mcsG ? mcsG.getSelected().length : 0;
+    const n = mcsN ? mcsN.getSelected().length : 0;
+    const part = (label, count, mcs) => {
+      const total = mcs ? mcs.options.length : 0;
+      if (count === 0) return `${label} 전체${total ? `(${total})` : ''}`;
+      return `${label} ${count}개`;
+    };
+    return `현재 선택: <strong>${part('🟡 카카오', k, mcsK)} · ${part('🔵 구글', g, mcsG)} · ${part('🟢 네이버', n, mcsN)}</strong>`;
+  }
+
+  function openFavModal({ mode, fav }) {
+    const modal     = document.getElementById('cmp-fav-modal');
+    const titleEl   = document.getElementById('cmp-fav-modal-title');
+    const previewEl = document.getElementById('cmp-fav-preview');
+    const inputEl   = document.getElementById('cmp-fav-name-input');
+    if (!modal) return;
+
+    modal.dataset.mode  = mode;
+    modal.dataset.favId = fav?.id || '';
+
+    if (mode === 'save') {
+      titleEl.textContent = '유닛 즐겨찾기 저장';
+      previewEl.innerHTML = buildPreviewText();
+      inputEl.value = '';
+      inputEl.placeholder = '즐겨찾기 이름 (예: 카페 메인)';
+    } else if (mode === 'rename') {
+      titleEl.textContent = '즐겨찾기 이름 변경';
+      previewEl.innerHTML = `<strong>${fav.name}</strong> 의 새 이름을 입력하세요.`;
+      inputEl.value = fav.name;
+      inputEl.placeholder = '새 이름';
+    }
+    modal.classList.remove('hidden');
+    setTimeout(() => { inputEl.focus(); inputEl.select(); }, 0);
+  }
+  function closeFavModal() {
+    document.getElementById('cmp-fav-modal')?.classList.add('hidden');
+  }
+  function confirmFavModal() {
+    const modal   = document.getElementById('cmp-fav-modal');
+    const inputEl = document.getElementById('cmp-fav-name-input');
+    if (!modal || !inputEl) return;
+    const name = inputEl.value.trim();
+    if (!name) { alert('이름을 입력하세요.'); inputEl.focus(); return; }
+
+    const mode = modal.dataset.mode;
+    if (mode === 'save') {
+      const exists = favorites.find(f => f.name === name);
+      if (exists && !confirm(`"${name}" 즐겨찾기가 이미 있습니다. 덮어쓸까요?`)) return;
+      const newFav = {
+        id:        exists?.id        || `fav_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+        name,
+        kakao:     mcsK ? mcsK.getSelected() : [],
+        google:    mcsG ? mcsG.getSelected() : [],
+        naver:     mcsN ? mcsN.getSelected() : [],
+        createdAt: exists?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+      if (exists) favorites = favorites.map(f => f.id === exists.id ? newFav : f);
+      else        favorites = [...favorites, newFav];
+      persistFavorites();
+      renderFavSelect();
+      const sel = document.getElementById('cmp-fav-select');
+      if (sel) { sel.value = newFav.id; updateFavButtons(); }
+    } else if (mode === 'rename') {
+      const id = modal.dataset.favId;
+      // 같은 이름 중복 방지 (자기 자신 제외)
+      if (favorites.some(f => f.id !== id && f.name === name)) {
+        if (!confirm(`"${name}" 이름의 다른 즐겨찾기가 이미 있습니다. 그대로 저장할까요?`)) return;
+      }
+      favorites = favorites.map(f => f.id === id ? { ...f, name, updatedAt: Date.now() } : f);
+      persistFavorites();
+      renderFavSelect();
+      const sel = document.getElementById('cmp-fav-select');
+      if (sel) sel.value = id;
+      updateFavButtons();
+    }
+    closeFavModal();
+  }
+
+  function applyFavorite(id) {
+    const fav = favorites.find(f => f.id === id);
+    if (!fav) return;
+    // setSelected 는 onChange 콜백을 호출하지 않으므로 수동으로 renderAll 한 번 호출
+    if (mcsK) mcsK.setSelected(Array.isArray(fav.kakao)  ? fav.kakao  : []);
+    if (mcsG) mcsG.setSelected(Array.isArray(fav.google) ? fav.google : []);
+    if (mcsN) mcsN.setSelected(Array.isArray(fav.naver)  ? fav.naver  : []);
+    if (cmpRawRows.length) renderAll();
+  }
+
+  // 사용자가 MCS 직접 조작 시 호출됨 (선택값과 즐겨찾기 내용이 어긋나면 dropdown 비움)
+  function onMcsChanged() {
+    if (suppressFavSelectChange) return;
+    const sel = document.getElementById('cmp-fav-select');
+    if (sel && sel.value) { sel.value = ''; updateFavButtons(); }
+  }
+
+  function setupFavorites() {
+    favorites = loadFavorites();
+    renderFavSelect();
+
+    document.getElementById('cmp-fav-save-btn')
+      ?.addEventListener('click', () => openFavModal({ mode: 'save' }));
+
+    document.getElementById('cmp-fav-rename-btn')
+      ?.addEventListener('click', () => {
+        const id = document.getElementById('cmp-fav-select')?.value;
+        const fav = favorites.find(f => f.id === id);
+        if (fav) openFavModal({ mode: 'rename', fav });
+      });
+
+    document.getElementById('cmp-fav-delete-btn')
+      ?.addEventListener('click', () => {
+        const sel = document.getElementById('cmp-fav-select');
+        const id = sel?.value;
+        const fav = favorites.find(f => f.id === id);
+        if (!fav) return;
+        if (!confirm(`"${fav.name}" 즐겨찾기를 삭제할까요?`)) return;
+        favorites = favorites.filter(f => f.id !== id);
+        persistFavorites();
+        renderFavSelect();
+        if (sel) sel.value = '';
+        updateFavButtons();
+      });
+
+    document.getElementById('cmp-fav-select')
+      ?.addEventListener('change', e => {
+        const id = e.target.value;
+        if (id) {
+          // applyFavorite 가 mcs.setSelected 를 호출하지만 그건 onChange 안 부르므로
+          // suppress 플래그는 사실상 불필요하지만 방어적으로 둠.
+          suppressFavSelectChange = true;
+          applyFavorite(id);
+          suppressFavSelectChange = false;
+        }
+        updateFavButtons();
+      });
+
+    // 모달 인터랙션
+    document.getElementById('cmp-fav-modal-cancel')?.addEventListener('click', closeFavModal);
+    document.getElementById('cmp-fav-modal-save')  ?.addEventListener('click', confirmFavModal);
+    document.querySelector('#cmp-fav-modal .cmp-modal-backdrop')
+      ?.addEventListener('click', closeFavModal);
+    document.getElementById('cmp-fav-name-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); confirmFavModal(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeFavModal(); }
+    });
+  }
 
 })();
