@@ -56,6 +56,22 @@
   function getGroups() { return groupingMode === 'device' ? DEVICES : PLATFORMS; }
   function getGroupKey() { return groupingMode === 'device' ? 'device' : 'platform'; }
 
+  // 코드 레벨 강제 매핑 (광고 ID → 디바이스)
+  // 자동 분류 (mediaName / 정규식) 로는 잡기 어려운 케이스를 영구적으로 고정.
+  // 사용자 수동 매핑(deviceManualMap) 보다는 우선순위가 낮아서 사용자 override 가능.
+  const FORCED_DEVICE_BY_UNIT = {
+    kakao: {
+      // mediaName 코드가 mw_* 라 자동으로 모바일웹으로 분류되지만 실제로는 앱 웹뷰
+      'DAN-djDbF2v77FUiL2lP': 'appWebview',
+      'DAN-ejKZU0e5OracPeTl': 'appWebview',
+      'DAN-rhui5LjrFIn2Xiq2': 'appWebview',
+      'DAN-GQcniuXXxgDxKNDk': 'appWebview',
+    },
+    google:  {},
+    naverSA: {},
+    naverDA: {},
+  };
+
   // 사용자 수동 매핑 (기타에 떨어진 유닛을 직접 분류 — localStorage 영속)
   // 형식: { "platform::unit": "deviceKey" }
   const DEVICE_MANUAL_KEY = 'cmp_device_manual_v1';
@@ -91,19 +107,25 @@
     return 'other';
   }
 
-  // row 단위 기기 분류 — 사용자 수동 매핑이 최우선, 그다음 카카오 mediaName, 마지막에 이름 매칭
+  // row 단위 기기 분류
+  // 우선순위: 사용자 수동 > 코드 강제(FORCED_DEVICE_BY_UNIT) > 검색광고/웹뷰 키워드
+  //          > 카카오 mediaName 코드 > 이름 기반 매칭
   function classifyDeviceForRow(r) {
     // 0) 사용자가 직접 분류한 유닛은 그 매핑이 최우선
     const manual = deviceManualMap[manualKey(r.platform, r.unit)];
     if (manual) return manual;
 
+    // 1) 코드 강제 매핑 — 자동 분류로는 못 잡는 특정 광고 ID 를 영구 고정
+    const forced = FORCED_DEVICE_BY_UNIT[r.platform]?.[r.unit];
+    if (forced) return forced;
+
     const composed = [r.unit, r.name, r.media].filter(Boolean).join(' ').toLowerCase();
 
-    // 1) 검색광고/웹뷰: 모든 플랫폼에서 이름 기준으로 우선 검사
+    // 2) 검색광고/웹뷰: 모든 플랫폼에서 이름 기준으로 우선 검사
     if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(composed)) return 'searchAd';
     if (/웹\s*뷰|webview|web[\s_-]?view|모바일\s*다음\s*카페[\s_-]*[컨콘]\s*텐츠/i.test(composed)) return 'appWebview';
 
-    // 2) 카카오: mediaName 코드가 가장 정확 (mw/pw/android/ios)
+    // 3) 카카오: mediaName 코드가 가장 정확 (mw/pw/android/ios)
     if (r.platform === 'kakao' && r.media) {
       const m = String(r.media).toLowerCase();
       if (m.includes('android')) return 'android';
