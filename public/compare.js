@@ -74,15 +74,20 @@
 
   // 유닛명/매체명을 보고 기기 플랫폼 분류 (5종 + 검색광고 + 기타)
   // 우선순위: 검색광고 > 앱 웹뷰 > iOS > 안드로이드 > 모바일웹 > PC > 기타
+  //
+  // ⚠️ 단어 경계 처리: \b 는 underscore(_) 를 단어 문자로 취급해서
+  //   "cafe_android_best" 같은 케이스를 못 잡음. 그래서 알파벳-경계
+  //   `(?<![a-z])...(?![a-z])` 로 바꿈 — _, -, ., 숫자, 한글, 공백 등은
+  //   모두 경계로 취급되어 자연스럽게 매칭됨.
   function classifyDeviceFromName(text) {
     const s = String(text).toLowerCase();
-    if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(s)) return 'searchAd';
+    if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/.test(s)) return 'searchAd';
     // 앱 웹뷰: 일반 웹뷰 키워드 + 네이버의 다음카페 앱 컨텐츠 영역
-    if (/웹\s*뷰|webview|web[\s_-]?view|모바일\s*다음\s*카페[\s_-]*[컨콘]\s*텐츠/i.test(s)) return 'appWebview';
-    if (/아이폰|아이패드|애플|\bios\b|\biphone\b|\bipad\b|\bapple\b/i.test(s)) return 'ios';
-    if (/안드로이드|\bandroid\b|\baos\b/i.test(s))                  return 'android';
-    if (/모웹|모바일\s*웹|m\s*웹|\bmweb\b|m[._-]?web|mobile[\s._-]?web|m[\s._-]?site/i.test(s)) return 'mobileWeb';
-    if (/\bpc\b|데스크탑|데스크톱|desktop|\bweb\b|\b웹\b/i.test(s)) return 'pc';
+    if (/웹\s*뷰|webview|web[\s_-]?view|모바일\s*다음\s*카페[\s_-]*[컨콘]\s*텐츠/.test(s)) return 'appWebview';
+    if (/아이폰|아이패드|애플|(?<![a-z])(?:ios|iphone|ipad|apple)(?![a-z])/.test(s)) return 'ios';
+    if (/안드로이드|(?<![a-z])(?:android|aos)(?![a-z])/.test(s))                       return 'android';
+    if (/모웹|모바일\s*웹|m\s*웹|(?<![a-z])(?:mweb|m[._-]web|mobile[\s._-]?web|m[\s._-]site)(?![a-z])/.test(s)) return 'mobileWeb';
+    if (/(?<![a-z])(?:pc|desktop|web)(?![a-z])|데스크탑|데스크톱|\b웹\b/.test(s))     return 'pc';
     return 'other';
   }
 
