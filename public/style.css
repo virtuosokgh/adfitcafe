@@ -1384,6 +1384,65 @@ tbody td:nth-child(3) { text-align: left; }
 }
 
 /* ───────────────────────────────────────────────
+ * 통합 비교 — 그룹핑 모드 토글 (광고 플랫폼별 / 기기 플랫폼별)
+ * ─────────────────────────────────────────────── */
+.cmp-grouping-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.cmp-grouping-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #4B5563;
+}
+.cmp-grouping-tabs {
+  display: inline-flex;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.cmp-grouping-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6B7280;
+  transition: background .15s, color .15s;
+}
+.cmp-grouping-tab:hover { color: #1F2937; }
+.cmp-grouping-tab.active {
+  background: #fff;
+  color: #1F2937;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 기기 플랫폼별 카드 — 플랫폼 카드와 동일한 좌측 컬러 바 (::before) 패턴 */
+.cmp-device-cards .cmp-card {
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+.cmp-device-cards .cmp-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 5px; height: 100%;
+  background: var(--accent, #6B7280);
+}
+.cmp-device-cards .cmp-card-total::before {
+  background: linear-gradient(180deg, #64748B, #0EA5E9, #84CC16, #374151, #A855F7, #F97316);
+  width: 6px;
+}
+
+/* ───────────────────────────────────────────────
  * 유닛 즐겨찾기 바 (컴팩트, 한 줄)
  *   주의: overflow 를 절대 걸지 않는다. 걸면 드롭다운/프리뷰가
  *   바 영역 안에서 잘리거나 스크롤이 생긴다 (광고 유닛 MCS 와 동일하게

@@ -615,6 +615,18 @@
       </div>
       <div id="cmp-error-msg" class="error-msg hidden"></div>
 
+      <!-- 그룹핑 모드 토글 (광고 플랫폼별 / 기기 플랫폼별) -->
+      <div class="cmp-grouping-bar" id="cmp-grouping-bar" style="display:none;">
+        <span class="cmp-grouping-label">📊 그룹핑</span>
+        <div class="cmp-grouping-tabs" role="tablist">
+          <button type="button" class="cmp-grouping-tab active" data-grouping="platform" role="tab" aria-selected="true">광고 플랫폼별</button>
+          <button type="button" class="cmp-grouping-tab"        data-grouping="device"   role="tab" aria-selected="false">기기 플랫폼별</button>
+        </div>
+      </div>
+
+      <!-- 기기 플랫폼별 수익 카드 (동적 렌더 — 기타는 0원이면 숨김) -->
+      <div class="summary-cards cmp-device-cards" id="cmp-summary-device" style="display:none;"></div>
+
       <!-- 플랫폼별 수익 카드 -->
       <div class="summary-cards cmp-platform-cards" id="cmp-summary" style="display:none;">
         <div class="card cmp-card cmp-card-kakao" data-card="kakao">

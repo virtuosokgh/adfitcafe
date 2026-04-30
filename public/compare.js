@@ -32,9 +32,67 @@
     { key: 'naverDA', label: '🟪 네이버 DA',    color: '#A855F7' },   // 퍼플 — SA 와 명확히 구분
   ];
 
+  // 기기 플랫폼 메타 (브라우저 → 네이티브 앱 → 하이브리드 → 검색 → 기타 순)
+  const DEVICES = [
+    { key: 'pc',         label: '💻 PC',          color: '#64748B' },
+    { key: 'mobileWeb',  label: '📱 모바일웹',    color: '#0EA5E9' },
+    { key: 'android',    label: '🤖 안드로이드',   color: '#84CC16' },
+    { key: 'ios',        label: '🍎 iOS',         color: '#374151' },
+    { key: 'appWebview', label: '🪟 앱 웹뷰',     color: '#A855F7' },
+    { key: 'searchAd',   label: '🔍 검색광고',    color: '#F97316' },
+    { key: 'other',      label: '❓ 기타',        color: '#9CA3AF' },  // 0원이면 숨김
+  ];
+
+  // 그룹핑 모드 ('platform' | 'device') — localStorage 영속 저장
+  const GROUPING_KEY = 'cmp_grouping_mode_v1';
+  let groupingMode = (() => {
+    try { return localStorage.getItem(GROUPING_KEY) === 'device' ? 'device' : 'platform'; }
+    catch { return 'platform'; }
+  })();
+  function setGroupingMode(mode) {
+    groupingMode = (mode === 'device') ? 'device' : 'platform';
+    try { localStorage.setItem(GROUPING_KEY, groupingMode); } catch {}
+  }
+  function getGroups() { return groupingMode === 'device' ? DEVICES : PLATFORMS; }
+  function getGroupKey() { return groupingMode === 'device' ? 'device' : 'platform'; }
+
+  // 유닛명/매체명을 보고 기기 플랫폼 분류 (5종 + 검색광고 + 기타)
+  // 우선순위: 검색광고 > 앱 웹뷰 > iOS > 안드로이드 > 모바일웹 > PC > 기타
+  function classifyDeviceFromName(text) {
+    const s = String(text).toLowerCase();
+    if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(s)) return 'searchAd';
+    if (/웹\s*뷰|webview|web[\s_-]?view/i.test(s))                return 'appWebview';
+    if (/아이폰|아이패드|애플|\bios\b|\biphone\b|\bipad\b|\bapple\b/i.test(s)) return 'ios';
+    if (/안드로이드|\bandroid\b|\baos\b/i.test(s))                  return 'android';
+    if (/모웹|모바일\s*웹|m\s*웹|\bmweb\b|m[._-]?web|mobile[\s._-]?web|m[\s._-]?site/i.test(s)) return 'mobileWeb';
+    if (/\bpc\b|데스크탑|데스크톱|desktop|\bweb\b|\b웹\b/i.test(s)) return 'pc';
+    return 'other';
+  }
+
+  // row 단위 기기 분류 — 카카오는 mediaName 코드(mw/pw/android/ios)를 우선 참고
+  function classifyDeviceForRow(r) {
+    const composed = [r.unit, r.name, r.media].filter(Boolean).join(' ').toLowerCase();
+
+    // 검색광고/웹뷰는 모든 플랫폼에서 이름 기준으로 우선 검사
+    if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(composed)) return 'searchAd';
+    if (/웹\s*뷰|webview|web[\s_-]?view/i.test(composed))                return 'appWebview';
+
+    // 카카오: mediaName 코드가 가장 정확 (mw/pw/android/ios)
+    if (r.platform === 'kakao' && r.media) {
+      const m = String(r.media).toLowerCase();
+      if (m.includes('android')) return 'android';
+      if (m.includes('ios'))     return 'ios';
+      if (m.startsWith('mw') || m.includes('mw_')) return 'mobileWeb';
+      if (m.startsWith('pw') || m.includes('pw_')) return 'pc';
+    }
+
+    return classifyDeviceFromName(composed);
+  }
+
   // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
   // v2: request 필드 추가됨 → v1 캐시는 자동 무시
-  const PERSIST_CACHE_KEY = 'cmp_fetch_cache_v2';
+  // v3: media/device 필드 추가됨 (기기 플랫폼별 그룹핑) → v2 캐시는 자동 무시
+  const PERSIST_CACHE_KEY = 'cmp_fetch_cache_v3';
   const CACHE_MAX_ENTRIES = 5;   // 기간별 최대 5개 유지 (오래된 것 퇴출)
   const clientCache = new Map(); // key(start-end) → { kRows, gRows, at }
   loadPersistCache();
@@ -164,10 +222,10 @@
     document.getElementById('cmp-csv-btn').addEventListener('click', downloadCsv);
 
     // 카드 — 일평균 토글 + 숫자 클릭 복사 (이벤트 위임)
-    const summaryEl = document.getElementById('cmp-summary');
-    if (summaryEl) {
-      summaryEl.addEventListener('click', e => {
-        // 일평균 토글
+    // 플랫폼 / 디바이스 카드 컨테이너 둘 다에 같은 핸들러 부착
+    function bindCardHandlers(containerEl) {
+      if (!containerEl) return;
+      containerEl.addEventListener('click', e => {
         const toggleBtn = e.target.closest('[data-avg-toggle]');
         if (toggleBtn) {
           const card = toggleBtn.closest('.cmp-card');
@@ -179,12 +237,35 @@
           }
           return;
         }
-        // 숫자 복사
         const copyEl = e.target.closest('.cmp-copy');
-        if (copyEl) {
-          copyCardValue(copyEl);
-          return;
-        }
+        if (copyEl) { copyCardValue(copyEl); return; }
+      });
+    }
+    bindCardHandlers(document.getElementById('cmp-summary'));
+    bindCardHandlers(document.getElementById('cmp-summary-device'));
+
+    // 그룹핑 모드 토글
+    const groupingBar = document.getElementById('cmp-grouping-bar');
+    if (groupingBar) {
+      groupingBar.addEventListener('click', e => {
+        const btn = e.target.closest('.cmp-grouping-tab');
+        if (!btn) return;
+        const mode = btn.dataset.grouping;
+        if (!mode || mode === groupingMode) return;
+        setGroupingMode(mode);
+        // 활성 탭 갱신
+        groupingBar.querySelectorAll('.cmp-grouping-tab').forEach(b => {
+          const isActive = b.dataset.grouping === groupingMode;
+          b.classList.toggle('active', isActive);
+          b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        if (cmpRawRows.length) renderAll();
+      });
+      // 초기 상태 (localStorage 복원본) 반영
+      groupingBar.querySelectorAll('.cmp-grouping-tab').forEach(b => {
+        const isActive = b.dataset.grouping === groupingMode;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
     }
 
@@ -528,16 +609,19 @@
       const dateIso = /^\d{8}$/.test(d)
         ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`
         : d;
-      out.push({
+      const row = {
         platform: 'kakao',
         unit: r.adunitId || r.adunitName,   // Unit ID 사용
         name: r.adunitName,                  // 원본 유닛명 (표시용)
+        media: r.mediaName || '',            // mediaName 코드 (mw/pw/android/ios) — 디바이스 분류용
         date: dateIso,
         request: Number(r.request || 0),
         impression: Number(r.impression || 0),
         click: Number(r.click || 0),
         profit: Number(r.profit || 0),
-      });
+      };
+      row.device = classifyDeviceForRow(row);
+      out.push(row);
     }
     return out;
   }
@@ -573,7 +657,7 @@
       if (!unit) continue;
       let profit = Number(r[cRev] || 0);
       if (profit >= 1000) profit = profit / 1e6;  // micros → 원
-      out.push({
+      const row = {
         platform: 'google',
         unit,
         date: r[cDate] || '',
@@ -581,7 +665,9 @@
         impression: Number(r[cImp] || 0),
         click: Number(r[cClk] || 0),
         profit,
-      });
+      };
+      row.device = classifyDeviceForRow(row);
+      out.push(row);
     }
     return out;
   }
@@ -652,15 +738,19 @@
       if (platform === 'naverSA') sumSA += profit;
       else sumDA += profit;
       const unit = adId || media;
-      out.push({
+      const row = {
         platform,
         unit,
+        name: adId,                       // 표시용 — adId 가 사람이 읽을 수 있는 광고명
+        media,                            // 매체명 — 디바이스 분류용 (둘 다 합쳐서 본다)
         date: r.date,
         request:    Number(r.request    || 0),
         impression: Number(r.impression || 0),
         click:      Number(r.click      || 0),
         profit,
-      });
+      };
+      row.device = classifyDeviceForRow(row);
+      out.push(row);
     }
     // 진단 로그
     try {
@@ -711,8 +801,10 @@
     loadingEl.classList.remove('hidden');
     resetCuteStates();
     setCuteMsg(force ? '최신 데이터 가져오는 중...' : '카카오와 구글한테 달려가는 중...');
-    ['cmp-summary', 'cmp-charts', 'cmp-table-section'].forEach(id =>
-      document.getElementById(id).style.display = 'none');
+    ['cmp-grouping-bar', 'cmp-summary', 'cmp-summary-device', 'cmp-charts', 'cmp-table-section'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
 
     const sYMD = toYYYYMMDD(start), eYMD = toYYYYMMDD(end);
     const cacheKey = `${sYMD}-${eYMD}`;
@@ -862,8 +954,11 @@
     if (nUnits.length) mcsN.refresh(nUnits);
 
     renderAll();
-    ['cmp-summary', 'cmp-charts', 'cmp-table-section'].forEach(id =>
-      document.getElementById(id).style.display = '');
+    // 그룹핑 토글 + 차트/테이블 표시 (요약 카드 컨테이너는 renderSummary 가 모드에 맞게 토글)
+    ['cmp-grouping-bar', 'cmp-charts', 'cmp-table-section'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
   }
 
   // ──────────────────────────────────────────────
@@ -893,11 +988,12 @@
     renderTable(rows);
   }
 
-  // 플랫폼별 합계 계산 (profit / request / impression / click)
-  function aggBy(rows, platform) {
+  // 그룹별 합계 계산 (profit/request/impression/click)
+  // groupKey 미지정 → 전체, 지정 → 'platform' | 'device' 어느 필드의 어떤 값 매칭
+  function aggBy(rows, groupValue, groupKey = 'platform') {
     let profit = 0, request = 0, impression = 0, click = 0;
     for (const r of rows) {
-      if (platform && r.platform !== platform) continue;
+      if (groupValue && r[groupKey] !== groupValue) continue;
       profit     += Number(r.profit || 0);
       request    += Number(r.request || 0);
       impression += Number(r.impression || 0);
@@ -922,10 +1018,25 @@
   }
 
   function renderSummary(rows) {
-    const aK  = aggBy(rows, 'kakao');
-    const aG  = aggBy(rows, 'google');
-    const aSA = aggBy(rows, 'naverSA');
-    const aDA = aggBy(rows, 'naverDA');
+    // 그룹핑 모드에 따라 카드 컨테이너 표시 토글
+    const platformEl = document.getElementById('cmp-summary');
+    const deviceEl   = document.getElementById('cmp-summary-device');
+    if (groupingMode === 'device') {
+      if (platformEl) platformEl.style.display = 'none';
+      if (deviceEl)   deviceEl.style.display = '';
+      renderSummaryDevice(rows);
+    } else {
+      if (deviceEl)   deviceEl.style.display = 'none';
+      if (platformEl) platformEl.style.display = '';
+      renderSummaryPlatform(rows);
+    }
+  }
+
+  function renderSummaryPlatform(rows) {
+    const aK  = aggBy(rows, 'kakao',   'platform');
+    const aG  = aggBy(rows, 'google',  'platform');
+    const aSA = aggBy(rows, 'naverSA', 'platform');
+    const aDA = aggBy(rows, 'naverDA', 'platform');
     const aT = {
       profit:     aK.profit     + aG.profit     + aSA.profit     + aDA.profit,
       request:    aK.request    + aG.request    + aSA.request    + aDA.request,
@@ -942,13 +1053,11 @@
       if (rawNum !== undefined) el.dataset.raw = String(rawNum);
     };
 
-    // 카드별 일평균 토글 상태 조회
     const isAvg = card => {
       const el = document.querySelector(`.cmp-card[data-card="${card}"]`);
       return el ? el.dataset.avg === '1' : false;
     };
 
-    // 카드 하나 채우기 — daily-avg이면 profit/req/imp를 days로 나눔. eCPM은 비율이라 동일.
     function fill(prefix, a) {
       const avg = isAvg(prefix);
       const P = avg ? a.profit     / days : a.profit;
@@ -966,13 +1075,87 @@
     fill('naverDA', aDA);
     fill('total',   aT);
 
-    // 점유율 / 유닛 개수 — 일평균과 무관
     setText('cmp-kakao-share',   `점유율 ${share(aK.profit)}`);
     setText('cmp-google-share',  `점유율 ${share(aG.profit)}`);
     setText('cmp-naverSA-share', `점유율 ${share(aSA.profit)}`);
     setText('cmp-naverDA-share', `점유율 ${share(aDA.profit)}`);
     const uniqUnitsCount = new Set(rows.map(r => `${r.platform}:${r.unit}`)).size;
     setText('cmp-total-sub', `${uniqUnitsCount}개 유닛 · ${days}일`);
+  }
+
+  // 기기 플랫폼별 카드 — 7개 동적 렌더 (기타는 0원이면 숨김, 있으면 마지막)
+  function renderSummaryDevice(rows) {
+    const container = document.getElementById('cmp-summary-device');
+    if (!container) return;
+
+    // DEVICES 순서대로 합계 계산 + 0원인 '기타'는 제외
+    const devAggs = DEVICES.map(d => ({ ...d, agg: aggBy(rows, d.key, 'device') }));
+    const visible = devAggs.filter(d => d.key !== 'other' || d.agg.profit > 0);
+
+    // 전체 합계
+    const aT = visible.reduce((acc, d) => ({
+      profit:     acc.profit     + d.agg.profit,
+      request:    acc.request    + d.agg.request,
+      impression: acc.impression + d.agg.impression,
+      click:      acc.click      + d.agg.click,
+    }), { profit: 0, request: 0, impression: 0, click: 0 });
+    const totalProfit = aT.profit;
+    const share = v => totalProfit > 0 ? pct(v / totalProfit * 100) : '-';
+    const days = getDayCount();
+
+    const isAvg = key => {
+      const el = container.querySelector(`.cmp-card[data-card="${key}"]`);
+      return el ? el.dataset.avg === '1' : false;
+    };
+
+    const cardHtml = ({ key, label, color, agg }) => {
+      const avg = isAvg(key);
+      const P = avg ? agg.profit     / days : agg.profit;
+      const R = avg ? agg.request    / days : agg.request;
+      const I = avg ? agg.impression / days : agg.impression;
+      const reqEcpm = ecpm(agg.profit, agg.request);
+      const impEcpm = ecpm(agg.profit, agg.impression);
+      return `
+        <div class="card cmp-card cmp-card-device${avg ? ' is-avg' : ''}"
+             data-card="${escHtml(key)}"
+             style="--accent: ${color};">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle
+                  title="클릭하면 선택 기간의 일평균으로 전환">${avg ? '총합' : '일평균'}</button>
+          <div class="card-label">${label}</div>
+          <div class="card-value cmp-copy">${krw(P)}</div>
+          <div class="cmp-card-sub">점유율 ${share(agg.profit)}</div>
+          <div class="cmp-card-metrics">
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy">${R ? num(Math.round(R)) : '-'}</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy">${I ? num(Math.round(I)) : '-'}</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy">${reqEcpm}</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy">${impEcpm}</span></div>
+          </div>
+        </div>`;
+    };
+
+    const totalCard = (() => {
+      const avg = isAvg('total');
+      const P = avg ? aT.profit     / days : aT.profit;
+      const R = avg ? aT.request    / days : aT.request;
+      const I = avg ? aT.impression / days : aT.impression;
+      const uniqUnitsCount = new Set(rows.map(r => `${r.platform}:${r.unit}`)).size;
+      return `
+        <div class="card total cmp-card cmp-card-total${avg ? ' is-avg' : ''}" data-card="total">
+          <button class="cmp-card-toggle" type="button" data-avg-toggle
+                  title="클릭하면 선택 기간의 일평균으로 전환">${avg ? '총합' : '일평균'}</button>
+          <div class="card-label">📊 전체 합계</div>
+          <div class="card-value cmp-copy">${krw(P)}</div>
+          <div class="cmp-card-sub">${uniqUnitsCount}개 유닛 · ${days}일</div>
+          <div class="cmp-card-metrics">
+            <div class="cmp-metric"><span class="lbl">총 요청</span><span class="val cmp-copy">${R ? num(Math.round(R)) : '-'}</span></div>
+            <div class="cmp-metric"><span class="lbl">총 노출</span><span class="val cmp-copy">${I ? num(Math.round(I)) : '-'}</span></div>
+            <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy">${ecpm(aT.profit, aT.request)}</span></div>
+            <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy">${ecpm(aT.profit, aT.impression)}</span></div>
+          </div>
+        </div>`;
+    })();
+
+    container.innerHTML = visible.map(cardHtml).join('') + totalCard;
   }
 
   function ecpmRaw(profit, base) {
@@ -1003,12 +1186,16 @@
       return date;
     };
 
-    // 플랫폼×버킷별 누적합 (profit/request/impression 모두)
+    // 모드에 따라 그룹 메타와 row→그룹 매핑 키를 다르게 가져감
+    const groups = getGroups();          // PLATFORMS or DEVICES
+    const groupKey = getGroupKey();      // 'platform' or 'device'
+
+    // 그룹×버킷별 누적합 (profit/request/impression 모두)
     const buckets = {};
-    PLATFORMS.forEach(p => { buckets[p.key] = {}; });
+    groups.forEach(g => { buckets[g.key] = {}; });
     for (const r of rows) {
       const k = toKey(r.date);
-      const b = buckets[r.platform]; if (!b) continue;
+      const b = buckets[r[groupKey]]; if (!b) continue;
       const g = b[k] || { profit: 0, request: 0, impression: 0 };
       g.profit     += r.profit     || 0;
       g.request    += r.request    || 0;
@@ -1018,8 +1205,8 @@
     const allKeys = [...new Set(rows.map(r => toKey(r.date)))].sort();
 
     const meta = CHART_METRIC_META[cmpChartMetric] || CHART_METRIC_META.profit;
-    const valueAt = (platformKey, k) => {
-      const g = buckets[platformKey][k];
+    const valueAt = (gKey, k) => {
+      const g = buckets[gKey][k];
       if (!g) return 0;
       if (meta.isEcpm) {
         const base = g[meta.base];
@@ -1028,14 +1215,21 @@
       return g[cmpChartMetric] || 0;
     };
 
-    const series = PLATFORMS.map(p => ({
-      label: p.label,
-      data: allKeys.map(k => valueAt(p.key, k)),
-      borderColor: p.color,
-      backgroundColor: p.color + '22',
+    // 기기 모드에서 데이터 0인 그룹 (특히 '기타'가 0이면) 은 시리즈에서 제외
+    const visibleGroups = groups.filter(g => {
+      if (g.key !== 'other') return true;
+      const total = allKeys.reduce((s, k) => s + (buckets[g.key][k]?.profit || 0), 0);
+      return total > 0;
+    });
+
+    const series = visibleGroups.map(g => ({
+      label: g.label,
+      data: allKeys.map(k => valueAt(g.key, k)),
+      borderColor: g.color,
+      backgroundColor: g.color + '22',
       tension: 0.3, fill: false,
-      pointRadius: 0, pointHoverRadius: 5,   // 평상시 점 숨김, hover 시만 표시
-      pointBackgroundColor: p.color,
+      pointRadius: 0, pointHoverRadius: 5,
+      pointBackgroundColor: g.color,
       borderWidth: 2,
     }));
 
@@ -1043,13 +1237,13 @@
     const totalData = allKeys.map(k => {
       if (meta.isEcpm) {
         let profit = 0, base = 0;
-        PLATFORMS.forEach(p => {
-          const g = buckets[p.key][k]; if (!g) return;
-          profit += g.profit; base += g[meta.base];
+        visibleGroups.forEach(g => {
+          const b = buckets[g.key][k]; if (!b) return;
+          profit += b.profit; base += b[meta.base];
         });
         return base > 0 ? profit / base * 1000 : 0;
       }
-      return PLATFORMS.reduce((sum, p) => sum + valueAt(p.key, k), 0);
+      return visibleGroups.reduce((sum, g) => sum + valueAt(g.key, k), 0);
     });
     series.push({
       label: '전체 합계',
@@ -1107,17 +1301,24 @@
   }
 
   function renderPieChart(rows) {
-    const values = PLATFORMS.map(p => aggBy(rows, p.key).profit);
+    const groups = getGroups();
+    const groupKey = getGroupKey();
+    // 0원 카테고리 (특히 '기타') 는 파이에서 제외
+    const visible = groups
+      .map(g => ({ ...g, profit: aggBy(rows, g.key, groupKey).profit }))
+      .filter(g => g.profit > 0);
+
+    const values = visible.map(g => g.profit);
     const total = values.reduce((a, b) => a + b, 0);
 
     if (cmpPieChart) cmpPieChart.destroy();
     cmpPieChart = new Chart(document.getElementById('cmp-pie-chart'), {
       type: 'doughnut',
       data: {
-        labels: PLATFORMS.map(p => p.label),
+        labels: visible.map(g => g.label),
         datasets: [{
           data: values,
-          backgroundColor: PLATFORMS.map(p => p.color),
+          backgroundColor: visible.map(g => g.color),
           borderWidth: 2, borderColor: '#fff',
         }],
       },
@@ -1134,11 +1335,14 @@
   }
 
   function renderTable(rows) {
-    // 유닛별 집계 (platform + unit)
+    // 유닛별 집계 (platform + unit). device 는 row 마다 동일하니 첫 row 의 값 채택
     const map = new Map();
     for (const r of rows) {
       const key = `${r.platform}::${r.unit}`;
-      const prev = map.get(key) || { platform: r.platform, unit: r.unit, request: 0, impression: 0, click: 0, profit: 0 };
+      const prev = map.get(key) || {
+        platform: r.platform, unit: r.unit, device: r.device || 'other',
+        request: 0, impression: 0, click: 0, profit: 0,
+      };
       prev.request    += (r.request || 0);
       prev.impression += r.impression;
       prev.click      += r.click;
@@ -1153,34 +1357,49 @@
     const total = arr.reduce((a, r) => a + r.profit, 0);
     arr.forEach(r => r.share = total > 0 ? r.profit / total * 100 : 0);
 
-    // 정렬: 플랫폼 우선(네이버SA → 네이버DA → 구글 → 카카오), 내부는 선택된 컬럼(기본: 유닛명)
+    // 정렬: 그룹핑 모드에 따라 1차 정렬 키가 달라진다.
+    //   - 광고 플랫폼별: 네이버SA → 네이버DA → 구글 → 카카오
+    //   - 기기 플랫폼별: PC → 모바일웹 → 안드로이드 → iOS → 앱 웹뷰 → 검색광고 → 기타
     const PLATFORM_ORDER = { naverSA: 0, naverDA: 1, google: 2, kakao: 3 };
+    const DEVICE_ORDER = Object.fromEntries(DEVICES.map((d, i) => [d.key, i]));
+    const useDeviceGroup = groupingMode === 'device';
     const { col, dir } = cmpSortState;
+
     arr.sort((a, b) => {
-      const po = (PLATFORM_ORDER[a.platform] ?? 99) - (PLATFORM_ORDER[b.platform] ?? 99);
-      if (po !== 0) return po;
-      // 같은 플랫폼 내: 현재 선택된 컬럼 기준, 디폴트는 유닛명 오름차순
+      const ga = useDeviceGroup ? (DEVICE_ORDER[a.device] ?? 99) : (PLATFORM_ORDER[a.platform] ?? 99);
+      const gb = useDeviceGroup ? (DEVICE_ORDER[b.device] ?? 99) : (PLATFORM_ORDER[b.platform] ?? 99);
+      if (ga !== gb) return ga - gb;
       const useCol = col || 'unit';
       const va = a[useCol], vb = b[useCol];
       if (typeof va === 'string') return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       return dir === 'asc' ? va - vb : vb - va;
     });
 
-    const badge = p => ({
+    const platformBadge = p => ({
       kakao:   `<span class="cmp-badge cmp-badge-kakao">🟡 카카오</span>`,
       google:  `<span class="cmp-badge cmp-badge-google">🔵 구글</span>`,
       naverSA: `<span class="cmp-badge cmp-badge-naver-sa">🟢 네이버 SA</span>`,
       naverDA: `<span class="cmp-badge cmp-badge-naver-da">🟪 네이버 DA</span>`,
     }[p] || p);
+    const deviceBadge = d => {
+      const meta = DEVICES.find(x => x.key === d);
+      if (!meta) return d;
+      return `<span class="cmp-badge cmp-badge-device" style="background:${meta.color}22; color:${meta.color}; border:1px solid ${meta.color}55;">${meta.label}</span>`;
+    };
 
-    // 플랫폼 그룹 첫 행에 구분선 클래스 추가
-    let prevPlatform = null;
+    // 그룹 첫 행에 구분선 클래스 추가 (모드에 따라 platform/device 둘 다 가능)
+    let prevGroup = null;
     document.getElementById('cmp-table-body').innerHTML = arr.map(r => {
-      const isGroupStart = r.platform !== prevPlatform;
-      prevPlatform = r.platform;
+      const groupVal = useDeviceGroup ? r.device : r.platform;
+      const isGroupStart = groupVal !== prevGroup;
+      prevGroup = groupVal;
+      // 기기 모드에서는 플랫폼 셀 자리에 기기 배지를 우선 표시 + 플랫폼 작게 부가
+      const platformCell = useDeviceGroup
+        ? `${deviceBadge(r.device)}<br/><span style="font-size:11px;color:#9CA3AF;">${platformBadge(r.platform)}</span>`
+        : platformBadge(r.platform);
       return `
       <tr class="cmp-row-${r.platform}${isGroupStart ? ' cmp-group-start' : ''}">
-        <td class="cmp-cell-platform">${badge(r.platform)}</td>
+        <td class="cmp-cell-platform">${platformCell}</td>
         <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
         <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
         <td class="cmp-cell-num">${r.request > 0 ? num(r.request) : '-'}</td>
