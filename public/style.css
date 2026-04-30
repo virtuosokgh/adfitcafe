@@ -1424,6 +1424,110 @@ tbody td:nth-child(3) { text-align: left; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
+/* 기타 카드 — 클릭 가능 표시 */
+.cmp-card-other-clickable {
+  cursor: pointer !important;
+  transition: transform .12s, box-shadow .12s;
+}
+.cmp-card-other-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+.cmp-card-other-hint {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #FEF3C7;
+  border: 1px dashed #F59E0B;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: #92400E;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* 기타 분류 모달 */
+.cmp-other-dialog {
+  min-width: 560px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.cmp-other-desc {
+  font-size: 12.5px;
+  color: #6B7280;
+  background: #F9FAFB;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.cmp-other-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-height: 60vh;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #fff;
+}
+.cmp-other-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 110px 160px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #F3F4F6;
+  font-size: 13px;
+}
+.cmp-other-row:last-child { border-bottom: none; }
+.cmp-other-row:hover { background: #F9FAFB; }
+.cmp-other-platform .cmp-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.cmp-other-unit {
+  font-weight: 500;
+  color: #1F2937;
+  word-break: break-all;
+  line-height: 1.35;
+}
+.cmp-other-profit {
+  text-align: right;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.cmp-other-device {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+.cmp-other-device:focus {
+  outline: none;
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.18);
+}
+.cmp-other-empty {
+  padding: 30px;
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 13px;
+}
+@media (max-width: 720px) {
+  .cmp-other-row {
+    grid-template-columns: 80px 1fr;
+    grid-template-areas: "p u" "x f" "x d";
+  }
+  .cmp-other-platform { grid-area: p; }
+  .cmp-other-unit     { grid-area: u; }
+  .cmp-other-profit   { grid-area: f; text-align: left; padding-left: 0; }
+  .cmp-other-device   { grid-area: d; }
+}
+
 /* 기기 플랫폼별 카드 — 플랫폼 카드와 동일한 좌측 컬러 바 (::before) 패턴 */
 .cmp-device-cards .cmp-card {
   cursor: default;

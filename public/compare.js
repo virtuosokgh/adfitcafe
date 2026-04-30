@@ -56,12 +56,29 @@
   function getGroups() { return groupingMode === 'device' ? DEVICES : PLATFORMS; }
   function getGroupKey() { return groupingMode === 'device' ? 'device' : 'platform'; }
 
+  // 사용자 수동 매핑 (기타에 떨어진 유닛을 직접 분류 — localStorage 영속)
+  // 형식: { "platform::unit": "deviceKey" }
+  const DEVICE_MANUAL_KEY = 'cmp_device_manual_v1';
+  function loadManualMappings() {
+    try {
+      const raw = localStorage.getItem(DEVICE_MANUAL_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch { return {}; }
+  }
+  function saveManualMappings(map) {
+    try { localStorage.setItem(DEVICE_MANUAL_KEY, JSON.stringify(map || {})); } catch {}
+  }
+  let deviceManualMap = loadManualMappings();
+  function manualKey(platform, unit) { return `${platform}::${unit}`; }
+
   // 유닛명/매체명을 보고 기기 플랫폼 분류 (5종 + 검색광고 + 기타)
   // 우선순위: 검색광고 > 앱 웹뷰 > iOS > 안드로이드 > 모바일웹 > PC > 기타
   function classifyDeviceFromName(text) {
     const s = String(text).toLowerCase();
     if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(s)) return 'searchAd';
-    if (/웹\s*뷰|webview|web[\s_-]?view/i.test(s))                return 'appWebview';
+    // 앱 웹뷰: 일반 웹뷰 키워드 + 네이버의 다음카페 앱 컨텐츠 영역
+    if (/웹\s*뷰|webview|web[\s_-]?view|모바일\s*다음\s*카페[\s_-]*[컨콘]\s*텐츠/i.test(s)) return 'appWebview';
     if (/아이폰|아이패드|애플|\bios\b|\biphone\b|\bipad\b|\bapple\b/i.test(s)) return 'ios';
     if (/안드로이드|\bandroid\b|\baos\b/i.test(s))                  return 'android';
     if (/모웹|모바일\s*웹|m\s*웹|\bmweb\b|m[._-]?web|mobile[\s._-]?web|m[\s._-]?site/i.test(s)) return 'mobileWeb';
@@ -69,15 +86,19 @@
     return 'other';
   }
 
-  // row 단위 기기 분류 — 카카오는 mediaName 코드(mw/pw/android/ios)를 우선 참고
+  // row 단위 기기 분류 — 사용자 수동 매핑이 최우선, 그다음 카카오 mediaName, 마지막에 이름 매칭
   function classifyDeviceForRow(r) {
+    // 0) 사용자가 직접 분류한 유닛은 그 매핑이 최우선
+    const manual = deviceManualMap[manualKey(r.platform, r.unit)];
+    if (manual) return manual;
+
     const composed = [r.unit, r.name, r.media].filter(Boolean).join(' ').toLowerCase();
 
-    // 검색광고/웹뷰는 모든 플랫폼에서 이름 기준으로 우선 검사
+    // 1) 검색광고/웹뷰: 모든 플랫폼에서 이름 기준으로 우선 검사
     if (/검색\s*결과|search[\s_-]?result|search[\s-]?ad/i.test(composed)) return 'searchAd';
-    if (/웹\s*뷰|webview|web[\s_-]?view/i.test(composed))                return 'appWebview';
+    if (/웹\s*뷰|webview|web[\s_-]?view|모바일\s*다음\s*카페[\s_-]*[컨콘]\s*텐츠/i.test(composed)) return 'appWebview';
 
-    // 카카오: mediaName 코드가 가장 정확 (mw/pw/android/ios)
+    // 2) 카카오: mediaName 코드가 가장 정확 (mw/pw/android/ios)
     if (r.platform === 'kakao' && r.media) {
       const m = String(r.media).toLowerCase();
       if (m.includes('android')) return 'android';
@@ -87,6 +108,13 @@
     }
 
     return classifyDeviceFromName(composed);
+  }
+
+  // 캐시에서 로드된 행 / 수동 매핑 변경 시 모든 row 의 device 필드 재계산
+  function reclassifyAllRows() {
+    for (const r of cmpRawRows) {
+      r.device = classifyDeviceForRow(r);
+    }
   }
 
   // 클라이언트 캐시 — localStorage 로 영구 저장 (TTL 없음, 명시적 조회 시에만 재조회)
@@ -239,6 +267,9 @@
         }
         const copyEl = e.target.closest('.cmp-copy');
         if (copyEl) { copyCardValue(copyEl); return; }
+        // 기타 카드 클릭 → 분류 모달 오픈
+        const otherCard = e.target.closest('.cmp-card-other-clickable');
+        if (otherCard) { openOtherClassifyModal(); return; }
       });
     }
     bindCardHandlers(document.getElementById('cmp-summary'));
@@ -815,6 +846,7 @@
     if (!force && cHit) {
       const nRows = mapNaverRows(start, end);
       cmpRawRows = [...cHit.kRows, ...cHit.gRows, ...nRows];
+      reclassifyAllRows();   // 캐시본 → 최신 분류 규칙/사용자 매핑 적용
       setCuteState('kakao',  'done', `${cHit.kRows.length}건`);
       setCuteState('google', 'done', `${cHit.gRows.length}건`);
       setCuteState('naver',  nRows.length ? 'done' : 'empty', nRows.length ? `${nRows.length}건` : '업로드 없음');
@@ -833,6 +865,7 @@
 
     const renderPartial = () => {
       cmpRawRows = [...kRows, ...gRows, ...nRows];
+      reclassifyAllRows();
       if (cmpRawRows.length) {
         finalizeAfterFetch(cacheKey);
       }
@@ -903,6 +936,7 @@
       clientCache.set(cacheKey, { kRows, gRows, at: Date.now() });
       savePersistCache();
       cmpRawRows = [...kRows, ...gRows, ...nRows];
+      reclassifyAllRows();
       console.log(`[compare] fetched k=${kRows.length} g=${gRows.length} n=${nRows.length}, ${Math.round(performance.now()-t0)}ms`);
 
       if (cmpRawRows.length === 0) {
@@ -1115,8 +1149,13 @@
       const I = avg ? agg.impression / days : agg.impression;
       const reqEcpm = ecpm(agg.profit, agg.request);
       const impEcpm = ecpm(agg.profit, agg.impression);
+      // 기타 카드는 클릭하면 분류 모달이 뜨도록 안내 텍스트 추가
+      const isOther = key === 'other';
+      const otherHint = isOther
+        ? '<div class="cmp-card-other-hint">📋 클릭해서 직접 분류하기</div>'
+        : '';
       return `
-        <div class="card cmp-card cmp-card-device${avg ? ' is-avg' : ''}"
+        <div class="card cmp-card cmp-card-device${avg ? ' is-avg' : ''}${isOther ? ' cmp-card-other-clickable' : ''}"
              data-card="${escHtml(key)}"
              style="--accent: ${color};">
           <button class="cmp-card-toggle" type="button" data-avg-toggle
@@ -1130,6 +1169,7 @@
             <div class="cmp-metric"><span class="lbl">요청 eCPM</span><span class="val cmp-copy">${reqEcpm}</span></div>
             <div class="cmp-metric"><span class="lbl">노출 eCPM</span><span class="val cmp-copy">${impEcpm}</span></div>
           </div>
+          ${otherHint}
         </div>`;
     };
 
@@ -1898,5 +1938,93 @@
     });
     document.getElementById('cmp-fav-image-remove')?.addEventListener('click', () => setModalImage(null));
   }
+
+  // ────────────────────────────────────────────────
+  // 기타(분류 불가) 유닛 직접 분류 모달
+  // ────────────────────────────────────────────────
+  function openOtherClassifyModal() {
+    const modal = document.getElementById('cmp-other-modal');
+    const list  = document.getElementById('cmp-other-list');
+    if (!modal || !list) return;
+
+    // 현재 필터 적용된 행에서 device='other' 인 (platform, unit) 추출 + 수익 합계
+    const rows = applyUnitFilter(cmpRawRows);
+    const map = new Map();   // key="platform::unit" → { platform, unit, profit }
+    for (const r of rows) {
+      if (r.device !== 'other') continue;
+      const k = manualKey(r.platform, r.unit);
+      const prev = map.get(k) || { platform: r.platform, unit: r.unit, profit: 0 };
+      prev.profit += Number(r.profit || 0);
+      map.set(k, prev);
+    }
+    const items = [...map.entries()]
+      .map(([k, v]) => ({ k, ...v }))
+      .sort((a, b) => b.profit - a.profit);
+
+    if (!items.length) {
+      list.innerHTML = '<div class="cmp-other-empty">기타로 분류된 유닛이 없습니다.</div>';
+    } else {
+      const platBadge = p => ({
+        kakao:   '<span class="cmp-badge cmp-badge-kakao">🟡 카카오</span>',
+        google:  '<span class="cmp-badge cmp-badge-google">🔵 구글</span>',
+        naverSA: '<span class="cmp-badge cmp-badge-naver-sa">🟢 SA</span>',
+        naverDA: '<span class="cmp-badge cmp-badge-naver-da">🟪 DA</span>',
+      }[p] || p);
+      const optionsHtml = `
+        <option value="other">❓ 기타 (자동)</option>
+        ${DEVICES.filter(d => d.key !== 'other').map(d =>
+          `<option value="${d.key}">${escHtml(d.label)}</option>`).join('')}
+      `;
+      list.innerHTML = items.map(it => {
+        const cur = deviceManualMap[it.k] || 'other';
+        const safeUnit = escHtml(it.unit);
+        return `
+          <div class="cmp-other-row">
+            <div class="cmp-other-platform">${platBadge(it.platform)}</div>
+            <div class="cmp-other-unit" title="${safeUnit}">${safeUnit}</div>
+            <div class="cmp-other-profit">${krw(it.profit)}</div>
+            <select class="cmp-other-device" data-key="${escHtml(it.k)}">
+              ${optionsHtml.replace(`value="${cur}"`, `value="${cur}" selected`)}
+            </select>
+          </div>`;
+      }).join('');
+    }
+    modal.classList.remove('hidden');
+  }
+  function closeOtherClassifyModal() {
+    document.getElementById('cmp-other-modal')?.classList.add('hidden');
+  }
+  function saveOtherClassify() {
+    const list = document.getElementById('cmp-other-list');
+    if (!list) return;
+    const selects = list.querySelectorAll('select.cmp-other-device');
+    let changed = false;
+    selects.forEach(sel => {
+      const key = sel.dataset.key;
+      const val = sel.value;
+      const prev = deviceManualMap[key];
+      if (val === 'other') {
+        if (prev) { delete deviceManualMap[key]; changed = true; }
+      } else {
+        if (prev !== val) { deviceManualMap[key] = val; changed = true; }
+      }
+    });
+    if (changed) {
+      saveManualMappings(deviceManualMap);
+      reclassifyAllRows();
+      if (cmpRawRows.length) renderAll();
+    }
+    closeOtherClassifyModal();
+  }
+
+  document.getElementById('cmp-other-cancel')?.addEventListener('click', closeOtherClassifyModal);
+  document.getElementById('cmp-other-save')  ?.addEventListener('click', saveOtherClassify);
+  document.querySelector('#cmp-other-modal .cmp-modal-backdrop')?.addEventListener('click', closeOtherClassifyModal);
+  document.addEventListener('keydown', e => {
+    const modal = document.getElementById('cmp-other-modal');
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      closeOtherClassifyModal();
+    }
+  });
 
 })();
