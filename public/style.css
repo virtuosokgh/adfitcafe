@@ -966,19 +966,21 @@ tbody td:nth-child(3) { text-align: left; }
   border-color: #111827;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-toggle {
+/* 전체 합계 카드(파란 배경) — 모드 무관하게 흰색 텍스트 override */
+.cmp-card-total .cmp-card-toggle {
   color: rgba(255,255,255,0.85);
   background: rgba(255,255,255,0.15);
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-toggle:hover {
+.cmp-card-total .cmp-card-toggle:hover {
   background: rgba(255,255,255,0.25);
   color: #fff;
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-toggle.on {
+.cmp-card-total .cmp-card-toggle.on {
   background: #fff;
   color: #111827;
   border-color: #fff;
 }
+.cmp-card-total .cmp-card-sub { color: rgba(255,255,255,0.85); }
 
 /* 숫자 복사 인터랙션 */
 .cmp-copy {
@@ -995,10 +997,10 @@ tbody td:nth-child(3) { text-align: left; }
   background: rgba(16, 185, 129, 0.18);
   transition: background 0.05s ease;
 }
-.cmp-platform-cards .cmp-card-total .cmp-copy:hover {
+.cmp-card-total .cmp-copy:hover {
   background: rgba(255, 255, 255, 0.15);
 }
-.cmp-platform-cards .cmp-card-total .cmp-copy.copied {
+.cmp-card-total .cmp-copy.copied {
   background: rgba(16, 185, 129, 0.35);
 }
 
@@ -1081,13 +1083,13 @@ tbody td:nth-child(3) { text-align: left; }
     font-size: 13px;
   }
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-metrics {
+.cmp-card-total .cmp-card-metrics {
   border-top-color: rgba(255, 255, 255, 0.25);
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-metrics .lbl {
+.cmp-card-total .cmp-card-metrics .lbl {
   color: rgba(255, 255, 255, 0.75);
 }
-.cmp-platform-cards .cmp-card-total .cmp-card-metrics .val {
+.cmp-card-total .cmp-card-metrics .val {
   color: #fff;
 }
 /* 5컬럼 레이아웃(≥1200px) — 카드가 좁으므로 지표는 1열로 → 숫자 여유 확보 */
