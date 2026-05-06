@@ -2068,9 +2068,9 @@
   function fmtMemoTime(ts) {
     if (!ts) return '';
     const d = new Date(ts); if (isNaN(d)) return '';
-    return d.toLocaleString('ko-KR', {
-      year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
+    const pad = n => String(n).padStart(2, '0');
+    // YYYY-MM-DD HH:mm — locale 의존 안 하는 깔끔한 포맷
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   async function fetchMemos() {
@@ -2118,14 +2118,22 @@
       return;
     }
     list.innerHTML = memos.map(m => {
-      const time = fmtMemoTime(m.updatedAt || m.createdAt);
-      const editedBadge = m.edited ? `<span class="cmp-memo-edited" title="수정됨 · ${fmtMemoTime(m.updatedAt)}">수정됨</span>` : '';
+      const isEdited = !!m.edited;
+      // 수정된 메모는 수정 시각, 아니면 작성 시각
+      const ts    = isEdited ? (m.updatedAt || m.createdAt) : m.createdAt;
+      const label = isEdited ? '수정' : '작성';
+      const time  = fmtMemoTime(ts);
+      const editedBadge = isEdited
+        ? `<span class="cmp-memo-edited" title="이 메모는 수정되었습니다">수정됨</span>`
+        : '';
       return `
         <div class="cmp-memo-card" data-memo-id="${escHtml(m.id)}">
           <div class="cmp-memo-card-header">
             <span class="cmp-memo-author">${escHtml(m.author)}</span>
-            ${editedBadge}
-            <span class="cmp-memo-time">${escHtml(time)}</span>
+            <span class="cmp-memo-meta-right">
+              ${editedBadge}
+              <span class="cmp-memo-time"><span class="cmp-memo-time-label">${label}</span> ${escHtml(time)}</span>
+            </span>
           </div>
           <div class="cmp-memo-content">${escHtml(m.content)}</div>
           <div class="cmp-memo-actions">

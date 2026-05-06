@@ -1971,28 +1971,46 @@ tbody td:nth-child(3) { text-align: left; }
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 12px;
   color: #6B7280;
 }
 .cmp-memo-author {
   font-weight: 700;
   color: #111827;
-  font-size: 12.5px;
+  font-size: 13px;
+}
+/* 우측 메타 그룹: [수정됨] + [작성/수정 날짜] */
+.cmp-memo-meta-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .cmp-memo-time {
-  margin-left: auto;
-  font-size: 11.5px;
-  color: #9CA3AF;
+  font-size: 12.5px;
+  color: #1F2937;                    /* 진하게 — 가독성 ↑ */
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1px;
+}
+.cmp-memo-time-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7280;
+  background: #F3F4F6;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 3px;
 }
 .cmp-memo-edited {
-  font-size: 10.5px;
-  color: #F59E0B;
-  background: #FFFBEB;
-  border: 1px solid #FDE68A;
+  font-size: 11px;
+  color: #B45309;
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
   border-radius: 4px;
-  padding: 1px 5px;
-  font-weight: 600;
+  padding: 2px 7px;
+  font-weight: 700;
 }
 .cmp-memo-content {
   white-space: pre-wrap;
