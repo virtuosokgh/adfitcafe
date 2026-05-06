@@ -315,7 +315,9 @@ async function writeMemosBlob(blob, data) {
 function sanitizeMemo(body) {
   const author  = String(body?.author  || '').trim().slice(0, MAX_AUTHOR);
   const content = String(body?.content || '').trim().slice(0, MAX_CONTENT);
-  return { author, content };
+  const rawDate = String(body?.appliedDate || '').trim();
+  const appliedDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  return { author, content, appliedDate };
 }
 function newMemoId() {
   return `memo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -334,13 +336,14 @@ app.get('/api/cmp-memos', async (req, res) => {
 app.post('/api/cmp-memos', async (req, res) => {
   const blob = await loadBlobSdk();
   if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
-  const { author, content } = sanitizeMemo(req.body);
+  const { author, content, appliedDate } = sanitizeMemo(req.body);
   if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
   if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
   const list = (await readMemosBlob(blob)) || [];
   const arr = Array.isArray(list) ? list : [];
   const now = Date.now();
-  const memo = { id: newMemoId(), author, content, createdAt: now, updatedAt: now, edited: false };
+  const memo = { id: newMemoId(), author, content, appliedDate,
+                 createdAt: now, updatedAt: now, edited: false };
   arr.unshift(memo);
   if (arr.length > MAX_MEMOS) arr.length = MAX_MEMOS;
   await writeMemosBlob(blob, arr);
@@ -352,14 +355,14 @@ app.put('/api/cmp-memos', async (req, res) => {
   if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
   const id = String(req.query?.id || '');
   if (!id) return res.status(400).json({ error: 'id 가 필요합니다.' });
-  const { author, content } = sanitizeMemo(req.body);
+  const { author, content, appliedDate } = sanitizeMemo(req.body);
   if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
   if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
   const list = (await readMemosBlob(blob)) || [];
   const arr = Array.isArray(list) ? list : [];
   const idx = arr.findIndex(m => m.id === id);
   if (idx < 0) return res.status(404).json({ error: '메모를 찾을 수 없습니다.' });
-  arr[idx] = { ...arr[idx], author, content, updatedAt: Date.now(), edited: true };
+  arr[idx] = { ...arr[idx], author, content, appliedDate, updatedAt: Date.now(), edited: true };
   await writeMemosBlob(blob, arr);
   res.json({ ok: true, memo: arr[idx] });
 });

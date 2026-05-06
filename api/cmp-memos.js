@@ -61,9 +61,12 @@ async function readBodyJson(req) {
 }
 
 function sanitizeMemoFields(body) {
-  const author = String(body?.author || '').trim().slice(0, MAX_AUTHOR);
+  const author  = String(body?.author  || '').trim().slice(0, MAX_AUTHOR);
   const content = String(body?.content || '').trim().slice(0, MAX_CONTENT);
-  return { author, content };
+  // 적용 날짜는 선택값 — YYYY-MM-DD 형식만 통과, 그 외(빈 문자열 포함) 는 null
+  const rawDate = String(body?.appliedDate || '').trim();
+  const appliedDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  return { author, content, appliedDate };
 }
 
 function newId() {
@@ -81,14 +84,15 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = await readBodyJson(req);
-      const { author, content } = sanitizeMemoFields(body);
+      const { author, content, appliedDate } = sanitizeMemoFields(body);
       if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
       if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
 
       const list = (await readJsonBlob(MEMOS_KEY)) || [];
       const arr = Array.isArray(list) ? list : [];
       const now = Date.now();
-      const memo = { id: newId(), author, content, createdAt: now, updatedAt: now, edited: false };
+      const memo = { id: newId(), author, content, appliedDate,
+                     createdAt: now, updatedAt: now, edited: false };
       arr.unshift(memo);                              // 최신이 위로
       if (arr.length > MAX_MEMOS) arr.length = MAX_MEMOS;
       await writeJsonBlob(MEMOS_KEY, arr);
@@ -99,7 +103,7 @@ export default async function handler(req, res) {
       const id = String(req.query?.id || '');
       if (!id) return res.status(400).json({ error: 'id 가 필요합니다.' });
       const body = await readBodyJson(req);
-      const { author, content } = sanitizeMemoFields(body);
+      const { author, content, appliedDate } = sanitizeMemoFields(body);
       if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
       if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
 
@@ -107,7 +111,8 @@ export default async function handler(req, res) {
       const arr = Array.isArray(list) ? list : [];
       const idx = arr.findIndex(m => m.id === id);
       if (idx < 0) return res.status(404).json({ error: '메모를 찾을 수 없습니다.' });
-      const updated = { ...arr[idx], author, content, updatedAt: Date.now(), edited: true };
+      const updated = { ...arr[idx], author, content, appliedDate,
+                        updatedAt: Date.now(), edited: true };
       arr[idx] = updated;
       await writeJsonBlob(MEMOS_KEY, arr);
       return res.status(200).json({ ok: true, memo: updated });

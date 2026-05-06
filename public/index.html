@@ -752,11 +752,17 @@
         <div class="cmp-modal-dialog">
           <h3 id="cmp-memo-modal-title">📝 메모 작성</h3>
           <div class="cmp-memo-form">
-            <label class="cmp-memo-field">
-              <span class="cmp-memo-field-label">작성자</span>
-              <input id="cmp-memo-author-input" type="text" maxlength="40" autocomplete="off"
-                     placeholder="이름 또는 닉네임" />
-            </label>
+            <div class="cmp-memo-form-row">
+              <label class="cmp-memo-field">
+                <span class="cmp-memo-field-label">작성자</span>
+                <input id="cmp-memo-author-input" type="text" maxlength="40" autocomplete="off"
+                       placeholder="이름 또는 닉네임" />
+              </label>
+              <label class="cmp-memo-field">
+                <span class="cmp-memo-field-label">적용 날짜 <span class="cmp-memo-field-hint">(선택)</span></span>
+                <input id="cmp-memo-date-input" type="date" autocomplete="off" />
+              </label>
+            </div>
             <label class="cmp-memo-field">
               <span class="cmp-memo-field-label">내용</span>
               <textarea id="cmp-memo-content-input" rows="6" maxlength="2000"

@@ -1323,15 +1323,79 @@
       borderWidth: 2, order: 0,
     });
 
+    // ── 메모 마커 데이터셋 (점만, 라인 X) ──
+    // appliedDate 가 있는 메모를 현재 차트의 bucket(toKey) 으로 매핑하여
+    // 차트 위쪽에 다이아몬드 점을 그리고 hover 시 메모 내용 툴팁 표시.
+    const visibleMemos = (memos || []).filter(m => m.appliedDate)
+      .map(m => ({ memo: m, key: toKey(m.appliedDate) }))
+      .filter(mm => allKeys.includes(mm.key));
+
+    // 같은 key 에 여러 메모가 있을 수 있으니 그룹핑
+    const memosByKey = new Map();
+    for (const mm of visibleMemos) {
+      const arr = memosByKey.get(mm.key) || [];
+      arr.push(mm.memo);
+      memosByKey.set(mm.key, arr);
+    }
+
+    // y 위치: 차트의 최대값 부근에 띄움 (차트 위쪽 가장자리)
+    const maxValue = Math.max(...series.flatMap(s => s.data.map(v => v ?? 0)), 0);
+    const memoYPos = maxValue > 0 ? maxValue * 1.08 : 1;
+    const memoData = allKeys.map(k => memosByKey.has(k) ? memoYPos : null);
+
+    if (visibleMemos.length) {
+      series.push({
+        label: '📝 메모',
+        data: memoData,
+        type: 'line',
+        showLine: false,
+        borderColor: 'rgba(245, 158, 11, 0)',
+        backgroundColor: '#F59E0B',
+        pointBackgroundColor: '#F59E0B',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 8,
+        pointHoverRadius: 10,
+        pointStyle: 'rectRot',     // 다이아몬드
+        // 툴팁/플러그인용 메타 데이터
+        _memosByKey: memosByKey,
+        order: -1,                 // 최상단에 그리기
+      });
+    }
+
     // 차트 제목 라벨 업데이트
     const labelEl = document.getElementById('cmp-chart-metric-label');
     if (labelEl) labelEl.textContent = meta.short;
+
+    // 차트 영역에 메모 위치를 표시할 세로 점선 (custom plugin)
+    const memoVerticalLinePlugin = {
+      id: 'memoVerticalLines',
+      afterDatasetsDraw(chart) {
+        if (!visibleMemos.length) return;
+        const { ctx, chartArea, scales: { x, y } } = chart;
+        if (!chartArea) return;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        for (const k of memosByKey.keys()) {
+          const xPos = x.getPixelForValue(k);
+          if (isNaN(xPos)) continue;
+          ctx.beginPath();
+          ctx.moveTo(xPos, chartArea.top);
+          ctx.lineTo(xPos, chartArea.bottom);
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    };
 
     if (cmpTrendChart) cmpTrendChart.destroy();
     let hoveredIdx = null;
     cmpTrendChart = new Chart(document.getElementById('cmp-trend-chart'), {
       type: 'line',
       data: { labels: allKeys, datasets: series },
+      plugins: [memoVerticalLinePlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
@@ -1350,7 +1414,34 @@
               font: { size: 12 },
             },
           },
-          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${meta.fmt(c.parsed.y)}` } },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const ds = c.dataset;
+                if (ds._memosByKey) {
+                  // 메모 데이터셋 — 라벨에는 짧게 헤더만
+                  const ms = ds._memosByKey.get(c.label) || [];
+                  const first = ms[0];
+                  return first ? `📝 ${first.author}` : '';
+                }
+                return `${ds.label}: ${meta.fmt(c.parsed.y)}`;
+              },
+              afterLabel: (c) => {
+                const ds = c.dataset;
+                if (!ds._memosByKey) return '';
+                const ms = ds._memosByKey.get(c.label) || [];
+                if (!ms.length) return '';
+                // 여러 메모면 모두 보여주기 (line 단위)
+                const lines = [];
+                for (const m of ms) {
+                  if (m.appliedDate) lines.push(`📅 ${m.appliedDate}`);
+                  lines.push(...String(m.content).split('\n'));
+                  if (ms.length > 1) lines.push('───');
+                }
+                return lines.join('\n');
+              },
+            },
+          },
         },
         scales: {
           x: {
@@ -2081,11 +2172,11 @@
       return Array.isArray(j.memos) ? j.memos : [];
     } catch { return []; }
   }
-  async function postMemo(author, content) {
+  async function postMemo(payload) {
     const res = await fetch(MEMO_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author, content }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2093,11 +2184,11 @@
     }
     return (await res.json()).memo;
   }
-  async function putMemo(id, author, content) {
+  async function putMemo(id, payload) {
     const res = await fetch(`${MEMO_API}?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author, content }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2123,6 +2214,9 @@
       const ts    = isEdited ? (m.updatedAt || m.createdAt) : m.createdAt;
       const label = isEdited ? '수정' : '작성';
       const time  = fmtMemoTime(ts);
+      const appliedBadge = m.appliedDate
+        ? `<div class="cmp-memo-applied">📅 적용: <strong>${escHtml(m.appliedDate)}</strong></div>`
+        : '';
       return `
         <div class="cmp-memo-card" data-memo-id="${escHtml(m.id)}">
           <div class="cmp-memo-card-header">
@@ -2131,6 +2225,7 @@
               <span class="cmp-memo-time"><span class="cmp-memo-time-label">${label}</span> ${escHtml(time)}</span>
             </span>
           </div>
+          ${appliedBadge}
           <div class="cmp-memo-content">${escHtml(m.content)}</div>
           <div class="cmp-memo-actions">
             <button type="button" class="cmp-memo-action-btn" data-act="edit">✏️ 수정</button>
@@ -2145,6 +2240,8 @@
     memos = await fetchMemos();
     memoLoaded = true;
     renderMemoList();
+    // 차트가 이미 그려져 있으면 메모 마커 반영
+    if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
   }
 
   function setPieTabMode(mode) {
@@ -2166,17 +2263,20 @@
     const modal = document.getElementById('cmp-memo-modal');
     const title = document.getElementById('cmp-memo-modal-title');
     const authorEl  = document.getElementById('cmp-memo-author-input');
+    const dateEl    = document.getElementById('cmp-memo-date-input');
     const contentEl = document.getElementById('cmp-memo-content-input');
     if (!modal || !authorEl || !contentEl) return;
     modal.dataset.mode = mode;
     modal.dataset.memoId = memo?.id || '';
     if (mode === 'edit') {
       title.textContent = '✏️ 메모 수정';
-      authorEl.value  = memo?.author  || '';
+      authorEl.value  = memo?.author      || '';
+      if (dateEl) dateEl.value = memo?.appliedDate || '';
       contentEl.value = memo?.content || '';
     } else {
       title.textContent = '📝 메모 작성';
       authorEl.value  = localStorage.getItem(MEMO_AUTHOR_LS_KEY) || '';
+      if (dateEl) dateEl.value = '';
       contentEl.value = '';
     }
     modal.classList.remove('hidden');
@@ -2191,18 +2291,22 @@
   async function saveMemoModal() {
     const modal = document.getElementById('cmp-memo-modal');
     const authorEl  = document.getElementById('cmp-memo-author-input');
+    const dateEl    = document.getElementById('cmp-memo-date-input');
     const contentEl = document.getElementById('cmp-memo-content-input');
     if (!modal || !authorEl || !contentEl) return;
-    const author = authorEl.value.trim();
+    const author  = authorEl.value.trim();
     const content = contentEl.value.trim();
+    const rawDate = (dateEl?.value || '').trim();
+    const appliedDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
     if (!author)  { alert('작성자를 입력하세요.'); authorEl.focus();  return; }
     if (!content) { alert('내용을 입력하세요.');  contentEl.focus(); return; }
     try {
       const mode = modal.dataset.mode;
       const id = modal.dataset.memoId;
+      const payload = { author, content, appliedDate };
       let saved;
-      if (mode === 'edit' && id) saved = await putMemo(id, author, content);
-      else                       saved = await postMemo(author, content);
+      if (mode === 'edit' && id) saved = await putMemo(id, payload);
+      else                       saved = await postMemo(payload);
       // 작성자 이름 캐시
       try { localStorage.setItem(MEMO_AUTHOR_LS_KEY, author); } catch {}
       // 로컬 상태 갱신
@@ -2210,6 +2314,8 @@
       if (idx >= 0) memos[idx] = saved;
       else          memos = [saved, ...memos];
       renderMemoList();
+      // 차트에 마커 반영 (현재 데이터 있을 때만)
+      if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
       closeMemoModal();
     } catch (err) {
       alert(err.message || '메모 저장 실패');
@@ -2237,6 +2343,7 @@
       if (ok) {
         memos = memos.filter(m => m.id !== id);
         renderMemoList();
+        if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
       } else {
         alert('메모 삭제 실패');
       }
