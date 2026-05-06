@@ -2123,15 +2123,11 @@
       const ts    = isEdited ? (m.updatedAt || m.createdAt) : m.createdAt;
       const label = isEdited ? '수정' : '작성';
       const time  = fmtMemoTime(ts);
-      const editedBadge = isEdited
-        ? `<span class="cmp-memo-edited" title="이 메모는 수정되었습니다">수정됨</span>`
-        : '';
       return `
         <div class="cmp-memo-card" data-memo-id="${escHtml(m.id)}">
           <div class="cmp-memo-card-header">
             <span class="cmp-memo-author">${escHtml(m.author)}</span>
             <span class="cmp-memo-meta-right">
-              ${editedBadge}
               <span class="cmp-memo-time"><span class="cmp-memo-time-label">${label}</span> ${escHtml(time)}</span>
             </span>
           </div>
