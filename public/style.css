@@ -1937,14 +1937,61 @@ tbody td:nth-child(3) { text-align: left; }
 .cmp-pie-share.hidden,
 .cmp-pie-memo.hidden { display: none; }
 
-/* 메모 목록 */
+/* 메모 목록 (페이지당 최대 3개) */
 .cmp-memo-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 340px;
-  overflow-y: auto;
-  padding-right: 4px;
+  /* 3개 카드는 높이가 정해져 있어 스크롤 불필요 — 페이지네이션 으로 대체 */
+}
+
+/* 페이지네이션 */
+.cmp-memo-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  color: #4B5563;
+  gap: 8px;
+}
+.cmp-memo-pagination.hidden { display: none; }
+.cmp-memo-page-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #374151;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.cmp-memo-page-btn:hover:not(:disabled) {
+  background: #F3F4F6;
+  border-color: #9CA3AF;
+  color: #111827;
+}
+.cmp-memo-page-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+.cmp-memo-page-info {
+  font-size: 12.5px;
+  color: #4B5563;
+  text-align: center;
+  flex: 1;
+}
+.cmp-memo-page-info strong {
+  color: #111827;
+  font-weight: 700;
+}
+.cmp-memo-page-count {
+  font-size: 11.5px;
+  color: #9CA3AF;
+  margin-left: 4px;
 }
 .cmp-memo-empty {
   padding: 30px 16px;

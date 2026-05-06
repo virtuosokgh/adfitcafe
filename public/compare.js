@@ -2170,8 +2170,10 @@
   // ────────────────────────────────────────────────
   const MEMO_API = '/api/cmp-memos';
   const MEMO_AUTHOR_LS_KEY = 'cmp_memo_last_author';
+  const MEMO_PAGE_SIZE = 3;   // 한 페이지에 보여줄 메모 수
   let memos = [];
   let memoLoaded = false;
+  let memoPage = 1;           // 1-based
   let pieTabMode = 'memo';    // 'share' | 'memo' — 메모를 디폴트로
 
   function fmtMemoTime(ts) {
@@ -2219,14 +2221,27 @@
     return res.ok;
   }
 
+  function getMemoTotalPages() {
+    return Math.max(1, Math.ceil(memos.length / MEMO_PAGE_SIZE));
+  }
+
   function renderMemoList() {
     const list = document.getElementById('cmp-memo-list');
     if (!list) return;
     if (!memos.length) {
       list.innerHTML = '<div class="cmp-memo-empty">메모가 없어요. ＋ 메모 작성을 눌러 첫 메모를 남겨보세요.</div>';
+      renderMemoPagination();
       return;
     }
-    list.innerHTML = memos.map(m => {
+    // 현재 페이지 정규화 (메모 삭제 등으로 범위 벗어났을 때 보정)
+    const totalPages = getMemoTotalPages();
+    if (memoPage > totalPages) memoPage = totalPages;
+    if (memoPage < 1) memoPage = 1;
+
+    const start = (memoPage - 1) * MEMO_PAGE_SIZE;
+    const pageMemos = memos.slice(start, start + MEMO_PAGE_SIZE);
+
+    list.innerHTML = pageMemos.map(m => {
       const isEdited = !!m.edited;
       // 수정된 메모는 수정 시각, 아니면 작성 시각
       const ts    = isEdited ? (m.updatedAt || m.createdAt) : m.createdAt;
@@ -2251,6 +2266,28 @@
           </div>
         </div>`;
     }).join('');
+
+    renderMemoPagination();
+  }
+
+  function renderMemoPagination() {
+    const pag = document.getElementById('cmp-memo-pagination');
+    if (!pag) return;
+    if (memos.length <= MEMO_PAGE_SIZE) {
+      pag.innerHTML = '';
+      pag.classList.add('hidden');
+      return;
+    }
+    const totalPages = getMemoTotalPages();
+    pag.classList.remove('hidden');
+    pag.innerHTML = `
+      <button type="button" class="cmp-memo-page-btn" data-page-act="prev" ${memoPage <= 1 ? 'disabled' : ''}>← 이전</button>
+      <span class="cmp-memo-page-info">
+        <strong>${memoPage}</strong> / ${totalPages}
+        <span class="cmp-memo-page-count">(총 ${memos.length}개)</span>
+      </span>
+      <button type="button" class="cmp-memo-page-btn" data-page-act="next" ${memoPage >= totalPages ? 'disabled' : ''}>다음 →</button>
+    `;
   }
 
   async function ensureMemosLoaded() {
@@ -2285,6 +2322,15 @@
     if (!memoLoaded) {
       ensureMemosLoaded().then(() => highlightMemosByIds(ids));
       return;
+    }
+    // 첫 매칭 메모가 다른 페이지에 있으면 그 페이지로 자동 이동
+    const idx = memos.findIndex(m => ids.includes(m.id));
+    if (idx >= 0) {
+      const targetPage = Math.floor(idx / MEMO_PAGE_SIZE) + 1;
+      if (targetPage !== memoPage) {
+        memoPage = targetPage;
+        renderMemoList();
+      }
     }
     // DOM 업데이트 후 실행
     requestAnimationFrame(() => {
@@ -2367,8 +2413,12 @@
       try { localStorage.setItem(MEMO_AUTHOR_LS_KEY, author); } catch {}
       // 로컬 상태 갱신
       const idx = memos.findIndex(m => m.id === saved.id);
-      if (idx >= 0) memos[idx] = saved;
-      else          memos = [saved, ...memos];
+      if (idx >= 0) {
+        memos[idx] = saved;                     // 수정 — 현재 페이지 유지
+      } else {
+        memos = [saved, ...memos];              // 신규 — 항상 1페이지로
+        memoPage = 1;
+      }
       renderMemoList();
       // 차트에 마커 반영 (현재 데이터 있을 때만)
       if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
@@ -2384,6 +2434,17 @@
     if (btn) setPieTabMode(btn.dataset.pieTab);
   });
   document.getElementById('cmp-memo-add-btn')?.addEventListener('click', () => openMemoModal('create'));
+
+  // 페이지네이션
+  document.getElementById('cmp-memo-pagination')?.addEventListener('click', e => {
+    const btn = e.target.closest('.cmp-memo-page-btn');
+    if (!btn || btn.disabled) return;
+    const totalPages = getMemoTotalPages();
+    if (btn.dataset.pageAct === 'prev')      memoPage = Math.max(1, memoPage - 1);
+    else if (btn.dataset.pageAct === 'next') memoPage = Math.min(totalPages, memoPage + 1);
+    renderMemoList();
+  });
+
   document.getElementById('cmp-memo-list')?.addEventListener('click', async e => {
     const btn = e.target.closest('.cmp-memo-action-btn');
     if (!btn) return;
