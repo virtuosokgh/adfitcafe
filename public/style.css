@@ -1966,6 +1966,19 @@ tbody td:nth-child(3) { text-align: left; }
   border-radius: 8px;
   font-size: 13px;
   color: #1F2937;
+  transition: box-shadow .25s ease, background .25s ease, border-left-color .25s ease;
+}
+/* 차트 마커 클릭 시 일시적 강조 */
+.cmp-memo-card.is-highlighted {
+  background: #FEF3C7;
+  border-left-color: #F59E0B;
+  box-shadow: 0 0 0 3px #FCD34D, 0 6px 16px rgba(245, 158, 11, 0.25);
+  animation: cmp-memo-pulse 0.6s ease-out 1;
+}
+@keyframes cmp-memo-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.015); }
+  100% { transform: scale(1); }
 }
 .cmp-memo-card-header {
   display: flex;

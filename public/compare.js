@@ -1402,6 +1402,24 @@
         onHover: (event, elements, chart) => {
           const newIdx = elements.length > 0 ? elements[0].index : null;
           if (newIdx !== hoveredIdx) { hoveredIdx = newIdx; chart.update('none'); }
+          // 메모 마커 위에 있으면 커서를 pointer 로
+          const isOverMemo = elements.some(el => chart.data.datasets[el.datasetIndex]?._memosByKey);
+          const canvas = event?.native?.target;
+          if (canvas && canvas.style) canvas.style.cursor = isOverMemo ? 'pointer' : 'default';
+        },
+        onClick: (event, elements, chart) => {
+          if (!elements?.length) return;
+          // 메모 데이터셋이 포함된 element 찾기
+          for (const el of elements) {
+            const ds = chart.data.datasets[el.datasetIndex];
+            if (!ds?._memosByKey) continue;
+            const key = chart.data.labels[el.index];
+            const ms = ds._memosByKey.get(key) || [];
+            if (ms.length) {
+              highlightMemosByIds(ms.map(m => m.id));
+              return;
+            }
+          }
         },
         plugins: {
           // 범례: 플랫폼 텍스트 + 컬러 스와치를 간결하게 표시
@@ -2256,6 +2274,44 @@
     document.getElementById('cmp-pie-memo') ?.classList.toggle('hidden', pieTabMode !== 'memo');
     document.getElementById('cmp-memo-add-btn')?.classList.toggle('hidden', pieTabMode !== 'memo');
     if (pieTabMode === 'memo') ensureMemosLoaded();
+  }
+
+  // 차트 마커 클릭 시 호출 — 메모 탭으로 전환 후 해당 카드를 스크롤 + 일시적 하이라이트
+  let memoHighlightTimer = null;
+  function highlightMemosByIds(ids) {
+    if (!ids?.length) return;
+    setPieTabMode('memo');
+    // 메모가 아직 로드 안 됐으면 fetch 후 재시도
+    if (!memoLoaded) {
+      ensureMemosLoaded().then(() => highlightMemosByIds(ids));
+      return;
+    }
+    // DOM 업데이트 후 실행
+    requestAnimationFrame(() => {
+      const list = document.getElementById('cmp-memo-list');
+      if (!list) return;
+      // 기존 하이라이트 제거
+      list.querySelectorAll('.cmp-memo-card.is-highlighted')
+        .forEach(c => c.classList.remove('is-highlighted'));
+      // 매칭 카드 강조 + 첫 번째 카드로 스크롤
+      let firstCard = null;
+      for (const id of ids) {
+        const safe = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(id) : id;
+        const card = list.querySelector(`.cmp-memo-card[data-memo-id="${safe}"]`);
+        if (!card) continue;
+        card.classList.add('is-highlighted');
+        if (!firstCard) firstCard = card;
+      }
+      if (firstCard) {
+        firstCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      // 일정 시간 후 자동 해제
+      if (memoHighlightTimer) clearTimeout(memoHighlightTimer);
+      memoHighlightTimer = setTimeout(() => {
+        list.querySelectorAll('.cmp-memo-card.is-highlighted')
+          .forEach(c => c.classList.remove('is-highlighted'));
+      }, 2800);
+    });
   }
 
   // 모달 (작성/수정 공용)
