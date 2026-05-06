@@ -281,6 +281,104 @@ app.delete('/api/naver-csv', async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// 통합 비교 메모 (Vercel Blob private store) — 로컬 개발용 프록시
+// -------------------------------------------------------------
+const MEMOS_KEY = 'cmp/memos.json';
+const MAX_AUTHOR = 40;
+const MAX_CONTENT = 2000;
+const MAX_MEMOS = 500;
+
+app.use('/api/cmp-memos', express.json({ limit: '256kb' }));
+
+async function readMemosBlob(blob) {
+  try {
+    const result = await blob.get(MEMOS_KEY, { access: 'private' });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    const text = await new Response(result.stream).text();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (err) {
+    if (err?.name === 'BlobNotFoundError') return null;
+    return null;
+  }
+}
+async function writeMemosBlob(blob, data) {
+  await blob.put(MEMOS_KEY, JSON.stringify(data), {
+    access: 'private',
+    contentType: 'application/json; charset=utf-8',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: 0,
+  });
+}
+function sanitizeMemo(body) {
+  const author  = String(body?.author  || '').trim().slice(0, MAX_AUTHOR);
+  const content = String(body?.content || '').trim().slice(0, MAX_CONTENT);
+  return { author, content };
+}
+function newMemoId() {
+  return `memo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+app.get('/api/cmp-memos', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정' });
+  }
+  const memos = (await readMemosBlob(blob)) || [];
+  res.json({ memos: Array.isArray(memos) ? memos : [] });
+});
+
+app.post('/api/cmp-memos', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  const { author, content } = sanitizeMemo(req.body);
+  if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
+  if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
+  const list = (await readMemosBlob(blob)) || [];
+  const arr = Array.isArray(list) ? list : [];
+  const now = Date.now();
+  const memo = { id: newMemoId(), author, content, createdAt: now, updatedAt: now, edited: false };
+  arr.unshift(memo);
+  if (arr.length > MAX_MEMOS) arr.length = MAX_MEMOS;
+  await writeMemosBlob(blob, arr);
+  res.json({ ok: true, memo });
+});
+
+app.put('/api/cmp-memos', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  const id = String(req.query?.id || '');
+  if (!id) return res.status(400).json({ error: 'id 가 필요합니다.' });
+  const { author, content } = sanitizeMemo(req.body);
+  if (!author) return res.status(400).json({ error: '작성자가 필요합니다.' });
+  if (!content) return res.status(400).json({ error: '내용이 필요합니다.' });
+  const list = (await readMemosBlob(blob)) || [];
+  const arr = Array.isArray(list) ? list : [];
+  const idx = arr.findIndex(m => m.id === id);
+  if (idx < 0) return res.status(404).json({ error: '메모를 찾을 수 없습니다.' });
+  arr[idx] = { ...arr[idx], author, content, updatedAt: Date.now(), edited: true };
+  await writeMemosBlob(blob, arr);
+  res.json({ ok: true, memo: arr[idx] });
+});
+
+app.delete('/api/cmp-memos', async (req, res) => {
+  const blob = await loadBlobSdk();
+  if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
+  const id = String(req.query?.id || '');
+  if (!id) {
+    try { await blob.del(MEMOS_KEY); } catch {}
+    return res.json({ ok: true, cleared: true });
+  }
+  const list = (await readMemosBlob(blob)) || [];
+  const arr = Array.isArray(list) ? list : [];
+  const next = arr.filter(m => m.id !== id);
+  await writeMemosBlob(blob, next);
+  res.json({ ok: true, removed: arr.length - next.length });
+});
+
 app.listen(PORT, () => {
   console.log(`카페 애드핏 대시보드 실행 중: http://localhost:${PORT}`);
 });

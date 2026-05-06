@@ -2054,4 +2054,204 @@
     }
   });
 
+  // ────────────────────────────────────────────────
+  // 메모 (점유율 ↔ 메모 토글)
+  //   서버: /api/cmp-memos (GET/POST/PUT/DELETE)
+  //   memo: { id, author, content, createdAt, updatedAt, edited }
+  // ────────────────────────────────────────────────
+  const MEMO_API = '/api/cmp-memos';
+  const MEMO_AUTHOR_LS_KEY = 'cmp_memo_last_author';
+  let memos = [];
+  let memoLoaded = false;
+  let pieTabMode = 'share';   // 'share' | 'memo'
+
+  function fmtMemoTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts); if (isNaN(d)) return '';
+    return d.toLocaleString('ko-KR', {
+      year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  async function fetchMemos() {
+    try {
+      const res = await fetch(MEMO_API, { cache: 'no-store' });
+      if (!res.ok) return [];
+      const j = await res.json();
+      return Array.isArray(j.memos) ? j.memos : [];
+    } catch { return []; }
+  }
+  async function postMemo(author, content) {
+    const res = await fetch(MEMO_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author, content }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `메모 저장 실패 (${res.status})`);
+    }
+    return (await res.json()).memo;
+  }
+  async function putMemo(id, author, content) {
+    const res = await fetch(`${MEMO_API}?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author, content }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `메모 수정 실패 (${res.status})`);
+    }
+    return (await res.json()).memo;
+  }
+  async function deleteMemo(id) {
+    const res = await fetch(`${MEMO_API}?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return res.ok;
+  }
+
+  function renderMemoList() {
+    const list = document.getElementById('cmp-memo-list');
+    if (!list) return;
+    if (!memos.length) {
+      list.innerHTML = '<div class="cmp-memo-empty">메모가 없어요. ＋ 메모 작성을 눌러 첫 메모를 남겨보세요.</div>';
+      return;
+    }
+    list.innerHTML = memos.map(m => {
+      const time = fmtMemoTime(m.updatedAt || m.createdAt);
+      const editedBadge = m.edited ? `<span class="cmp-memo-edited" title="수정됨 · ${fmtMemoTime(m.updatedAt)}">수정됨</span>` : '';
+      return `
+        <div class="cmp-memo-card" data-memo-id="${escHtml(m.id)}">
+          <div class="cmp-memo-card-header">
+            <span class="cmp-memo-author">${escHtml(m.author)}</span>
+            ${editedBadge}
+            <span class="cmp-memo-time">${escHtml(time)}</span>
+          </div>
+          <div class="cmp-memo-content">${escHtml(m.content)}</div>
+          <div class="cmp-memo-actions">
+            <button type="button" class="cmp-memo-action-btn" data-act="edit">✏️ 수정</button>
+            <button type="button" class="cmp-memo-action-btn danger" data-act="delete">🗑 삭제</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function ensureMemosLoaded() {
+    if (memoLoaded) return;
+    memos = await fetchMemos();
+    memoLoaded = true;
+    renderMemoList();
+  }
+
+  function setPieTabMode(mode) {
+    pieTabMode = mode === 'memo' ? 'memo' : 'share';
+    const tabs = document.querySelectorAll('.cmp-pie-tab');
+    tabs.forEach(t => {
+      const isActive = t.dataset.pieTab === pieTabMode;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    document.getElementById('cmp-pie-share')?.classList.toggle('hidden', pieTabMode !== 'share');
+    document.getElementById('cmp-pie-memo') ?.classList.toggle('hidden', pieTabMode !== 'memo');
+    document.getElementById('cmp-memo-add-btn')?.classList.toggle('hidden', pieTabMode !== 'memo');
+    if (pieTabMode === 'memo') ensureMemosLoaded();
+  }
+
+  // 모달 (작성/수정 공용)
+  function openMemoModal(mode, memo) {
+    const modal = document.getElementById('cmp-memo-modal');
+    const title = document.getElementById('cmp-memo-modal-title');
+    const authorEl  = document.getElementById('cmp-memo-author-input');
+    const contentEl = document.getElementById('cmp-memo-content-input');
+    if (!modal || !authorEl || !contentEl) return;
+    modal.dataset.mode = mode;
+    modal.dataset.memoId = memo?.id || '';
+    if (mode === 'edit') {
+      title.textContent = '✏️ 메모 수정';
+      authorEl.value  = memo?.author  || '';
+      contentEl.value = memo?.content || '';
+    } else {
+      title.textContent = '📝 메모 작성';
+      authorEl.value  = localStorage.getItem(MEMO_AUTHOR_LS_KEY) || '';
+      contentEl.value = '';
+    }
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      if (!authorEl.value) authorEl.focus();
+      else contentEl.focus();
+    }, 0);
+  }
+  function closeMemoModal() {
+    document.getElementById('cmp-memo-modal')?.classList.add('hidden');
+  }
+  async function saveMemoModal() {
+    const modal = document.getElementById('cmp-memo-modal');
+    const authorEl  = document.getElementById('cmp-memo-author-input');
+    const contentEl = document.getElementById('cmp-memo-content-input');
+    if (!modal || !authorEl || !contentEl) return;
+    const author = authorEl.value.trim();
+    const content = contentEl.value.trim();
+    if (!author)  { alert('작성자를 입력하세요.'); authorEl.focus();  return; }
+    if (!content) { alert('내용을 입력하세요.');  contentEl.focus(); return; }
+    try {
+      const mode = modal.dataset.mode;
+      const id = modal.dataset.memoId;
+      let saved;
+      if (mode === 'edit' && id) saved = await putMemo(id, author, content);
+      else                       saved = await postMemo(author, content);
+      // 작성자 이름 캐시
+      try { localStorage.setItem(MEMO_AUTHOR_LS_KEY, author); } catch {}
+      // 로컬 상태 갱신
+      const idx = memos.findIndex(m => m.id === saved.id);
+      if (idx >= 0) memos[idx] = saved;
+      else          memos = [saved, ...memos];
+      renderMemoList();
+      closeMemoModal();
+    } catch (err) {
+      alert(err.message || '메모 저장 실패');
+    }
+  }
+
+  // 토글 + 작성 버튼 + 카드 액션 이벤트
+  document.querySelector('.cmp-pie-tabs')?.addEventListener('click', e => {
+    const btn = e.target.closest('.cmp-pie-tab');
+    if (btn) setPieTabMode(btn.dataset.pieTab);
+  });
+  document.getElementById('cmp-memo-add-btn')?.addEventListener('click', () => openMemoModal('create'));
+  document.getElementById('cmp-memo-list')?.addEventListener('click', async e => {
+    const btn = e.target.closest('.cmp-memo-action-btn');
+    if (!btn) return;
+    const card = btn.closest('.cmp-memo-card');
+    const id = card?.dataset.memoId;
+    const memo = memos.find(m => m.id === id);
+    if (!memo) return;
+    if (btn.dataset.act === 'edit') {
+      openMemoModal('edit', memo);
+    } else if (btn.dataset.act === 'delete') {
+      if (!confirm(`"${memo.author}" 의 메모를 삭제할까요?`)) return;
+      const ok = await deleteMemo(id);
+      if (ok) {
+        memos = memos.filter(m => m.id !== id);
+        renderMemoList();
+      } else {
+        alert('메모 삭제 실패');
+      }
+    }
+  });
+
+  // 모달 인터랙션
+  document.getElementById('cmp-memo-modal-cancel')?.addEventListener('click', closeMemoModal);
+  document.getElementById('cmp-memo-modal-save')  ?.addEventListener('click', saveMemoModal);
+  document.querySelector('#cmp-memo-modal .cmp-modal-backdrop')?.addEventListener('click', closeMemoModal);
+  document.addEventListener('keydown', e => {
+    const modal = document.getElementById('cmp-memo-modal');
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      closeMemoModal();
+    }
+    // Enter 단독은 textarea 줄바꿈이라 그대로 두고, Cmd/Ctrl+Enter 로 저장
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && modal && !modal.classList.contains('hidden')) {
+      e.preventDefault(); saveMemoModal();
+    }
+  });
+
 })();

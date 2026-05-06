@@ -1882,3 +1882,176 @@ tbody td:nth-child(3) { text-align: left; }
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
+
+/* ───────────────────────────────────────────────
+ * 점유율 ↔ 메모 토글 (cmp-chart-pie 내부)
+ * ─────────────────────────────────────────────── */
+.cmp-pie-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.cmp-pie-tabs {
+  display: inline-flex;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.cmp-pie-tab {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6B7280;
+  transition: background .15s, color .15s;
+}
+.cmp-pie-tab:hover { color: #1F2937; }
+.cmp-pie-tab.active {
+  background: #fff;
+  color: #1F2937;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.cmp-memo-add-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid #1A73E8;
+  background: #1A73E8;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.cmp-memo-add-btn:hover { background: #1557B0; border-color: #1557B0; }
+.cmp-memo-add-btn.hidden { display: none; }
+
+.cmp-pie-share.hidden,
+.cmp-pie-memo.hidden { display: none; }
+
+/* 메모 목록 */
+.cmp-memo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.cmp-memo-empty {
+  padding: 30px 16px;
+  text-align: center;
+  color: #9CA3AF;
+  font-size: 13px;
+  background: #F9FAFB;
+  border: 1px dashed #E5E7EB;
+  border-radius: 8px;
+}
+
+/* 메모 카드 */
+.cmp-memo-card {
+  position: relative;
+  padding: 12px 14px 36px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-left: 4px solid #1A73E8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1F2937;
+}
+.cmp-memo-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #6B7280;
+}
+.cmp-memo-author {
+  font-weight: 700;
+  color: #111827;
+  font-size: 12.5px;
+}
+.cmp-memo-time {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #9CA3AF;
+}
+.cmp-memo-edited {
+  font-size: 10.5px;
+  color: #F59E0B;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 600;
+}
+.cmp-memo-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+.cmp-memo-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+.cmp-memo-action-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  background: #fff;
+  color: #4B5563;
+  border: 1px solid #D1D5DB;
+  transition: background .12s;
+}
+.cmp-memo-action-btn:hover { background: #F3F4F6; color: #111827; }
+.cmp-memo-action-btn.danger { color: #B91C1C; border-color: #FCA5A5; }
+.cmp-memo-action-btn.danger:hover { background: #FEE2E2; }
+
+/* 메모 작성/수정 모달 폼 */
+.cmp-memo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.cmp-memo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cmp-memo-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4B5563;
+}
+.cmp-memo-field input,
+.cmp-memo-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #D1D5DB;
+  border-radius: 7px;
+  resize: vertical;
+}
+.cmp-memo-field input:focus,
+.cmp-memo-field textarea:focus {
+  outline: none;
+  border-color: #1A73E8;
+  box-shadow: 0 0 0 3px rgba(26,115,232,0.15);
+}
