@@ -2063,7 +2063,7 @@
   const MEMO_AUTHOR_LS_KEY = 'cmp_memo_last_author';
   let memos = [];
   let memoLoaded = false;
-  let pieTabMode = 'share';   // 'share' | 'memo'
+  let pieTabMode = 'memo';    // 'share' | 'memo' — 메모를 디폴트로
 
   function fmtMemoTime(ts) {
     if (!ts) return '';
@@ -2253,5 +2253,8 @@
       e.preventDefault(); saveMemoModal();
     }
   });
+
+  // 메모를 디폴트로 보여주므로 페이지 진입 시 미리 fetch
+  ensureMemosLoaded();
 
 })();

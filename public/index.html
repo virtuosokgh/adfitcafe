@@ -728,17 +728,17 @@
         <div class="chart-section cmp-chart-pie">
           <div class="cmp-pie-header">
             <div class="cmp-pie-tabs" role="tablist">
-              <button type="button" class="cmp-pie-tab active" data-pie-tab="share" role="tab" aria-selected="true">📊 점유율</button>
-              <button type="button" class="cmp-pie-tab" data-pie-tab="memo" role="tab" aria-selected="false">📝 메모</button>
+              <button type="button" class="cmp-pie-tab" data-pie-tab="share" role="tab" aria-selected="false">📊 점유율</button>
+              <button type="button" class="cmp-pie-tab active" data-pie-tab="memo" role="tab" aria-selected="true">📝 메모</button>
             </div>
-            <button type="button" id="cmp-memo-add-btn" class="cmp-memo-add-btn hidden" title="새 메모 작성">＋ 메모 작성</button>
+            <button type="button" id="cmp-memo-add-btn" class="cmp-memo-add-btn" title="새 메모 작성">＋ 메모 작성</button>
           </div>
-          <!-- 점유율 (기본) -->
-          <div class="cmp-pie-share" id="cmp-pie-share">
+          <!-- 점유율 (탭 전환 시) -->
+          <div class="cmp-pie-share hidden" id="cmp-pie-share">
             <canvas id="cmp-pie-chart"></canvas>
           </div>
-          <!-- 메모 목록 -->
-          <div class="cmp-pie-memo hidden" id="cmp-pie-memo">
+          <!-- 메모 목록 (기본) -->
+          <div class="cmp-pie-memo" id="cmp-pie-memo">
             <div class="cmp-memo-list" id="cmp-memo-list">
               <div class="cmp-memo-empty">메모가 없어요. ＋ 메모 작성을 눌러 첫 메모를 남겨보세요.</div>
             </div>
