@@ -414,7 +414,8 @@
         } catch {}
         syncNaverStatus(file.name, uploadedAt, 'server');
 
-        // 이미 조회 결과가 있으면 리렌더
+        // 이미 조회 결과가 있으면 cmpRawRows 의 네이버 부분만 재구성 후 리렌더
+        rebuildNaverInCmpRawRows();
         if (cmpRawRows.length) renderAll();
 
         // 네이버 탭도 최신본으로 갱신
@@ -494,16 +495,36 @@
     syncNaverStatus();
   }
 
-  // naver.js 에서 업로드했을 때 compare 탭도 자동 갱신되도록 global 등록
+  // 네이버 부분만 새로 mapping 해서 cmpRawRows 재구성 (kakao/google 행은 그대로 유지)
+  function rebuildNaverInCmpRawRows() {
+    if (!cmpCurrentRange?.start || !cmpCurrentRange?.end) return false;
+    const kgRows = cmpRawRows.filter(r => r.platform === 'kakao' || r.platform === 'google');
+    const nRows  = mapNaverRows(cmpCurrentRange.start, cmpCurrentRange.end);
+    cmpRawRows = [...kgRows, ...nRows];
+    reclassifyAllRows();
+    // MCS 네이버 옵션 업데이트
+    if (mcsN) {
+      const nUnits = [...new Set(nRows.map(r => r.unit))].sort();
+      if (nUnits.length) mcsN.refresh(nUnits);
+    }
+    return true;
+  }
+
+  // naver.js 에서 업로드/삭제했을 때 compare 탭도 자동 갱신되도록 global 등록
   window.cmpReloadNaverFromShared = async () => {
     await loadFromServer();
+    rebuildNaverInCmpRawRows();
     if (cmpRawRows.length) renderAll();
   };
 
   // 탭 활성화 시 서버 최신본 재조회
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
-    loadFromServer().then(ok => { if (ok && cmpRawRows.length) renderAll(); }).catch(() => {});
+    loadFromServer().then(ok => {
+      if (!ok) return;
+      rebuildNaverInCmpRawRows();
+      if (cmpRawRows.length) renderAll();
+    }).catch(() => {});
   });
 
   function syncNaverStatus(fileName, uploadedAt, source) {
