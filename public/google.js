@@ -438,12 +438,16 @@ function renderGoogleChart(rowsA, rowsB) {
   const datasets = [{
     label: `기본 ${gMetricLabel(m)}`,
     data: dataA, borderColor: '#1A73E8', backgroundColor: 'rgba(26,115,232,.1)',
-    tension: 0.3, fill: true, pointRadius: 3,
+    // 단조 보간 — overshoot 방지 (점 사이에 가짜 봉우리/골 안 생김)
+    cubicInterpolationMode: 'monotone', tension: 0,
+    fill: true, pointRadius: 3,
   }];
   if (dataB) datasets.push({
     label: `비교 ${gMetricLabel(m)}`,
     data: dataB, borderColor: '#F97316', backgroundColor: 'rgba(249,115,22,.1)',
-    borderDash: [6, 4], tension: 0.3, fill: false, pointRadius: 3,
+    borderDash: [6, 4],
+    cubicInterpolationMode: 'monotone', tension: 0,
+    fill: false, pointRadius: 3,
   });
 
   if (googleChart) googleChart.destroy();

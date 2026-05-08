@@ -1315,7 +1315,12 @@
       data: allKeys.map(k => valueAt(g.key, k)),
       borderColor: g.color,
       backgroundColor: g.color + '22',
-      tension: 0.3, fill: false,
+      // 단조(monotone) 보간 — 부드러운 곡선이지만 점과 점 사이 값 범위를
+      // 벗어나지 않음 (overshoot 방지). 일별 데이터인데 사이에 가짜 봉우리/골이
+      // 보이던 문제 해결.
+      cubicInterpolationMode: 'monotone',
+      tension: 0,
+      fill: false,
       pointRadius: 0, pointHoverRadius: 5,
       pointBackgroundColor: g.color,
       borderWidth: 2,
@@ -1338,7 +1343,9 @@
       data: totalData,
       borderColor: '#64748B',
       backgroundColor: 'transparent',
-      tension: 0.35, fill: false,
+      cubicInterpolationMode: 'monotone',
+      tension: 0,
+      fill: false,
       pointRadius: 0, pointHoverRadius: 5,
       pointBackgroundColor: '#64748B',
       borderWidth: 2, order: 0,
