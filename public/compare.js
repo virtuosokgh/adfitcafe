@@ -868,11 +868,17 @@
     if (el) el.textContent = msg;
   }
 
+  // race condition 방지용 시퀀스 — 새 fetch 시작할 때마다 증가하고
+  // async 결과 적용 직전에 본인 seq 가 최신인지 확인. 늦게 도착한 옛 fetch 는 무시.
+  let lastFetchSeq = 0;
+
   async function fetchAndRender(opts = {}) {
     const force = opts.force === true;
     const { start, end } = getDateRange();
     if (!start || !end) { alert('시작일/종료일을 선택하세요.'); return; }
     cmpCurrentRange = { start, end };   // 일평균 계산용
+    const seq = ++lastFetchSeq;          // 이 fetch 의 식별자
+    const isStale = () => seq !== lastFetchSeq;
 
     const errorEl   = document.getElementById('cmp-error-msg');
     const loadingEl = document.getElementById('cmp-loading');
@@ -893,6 +899,7 @@
     const cHit = clientCache.get(cacheKey);
     if (!force && cHit) {
       const nRows = mapNaverRows(start, end);
+      if (isStale()) return;             // 더 새 fetch 시작됐으면 무시
       cmpRawRows = [...cHit.kRows, ...cHit.gRows, ...nRows];
       reclassifyAllRows();   // 캐시본 → 최신 분류 규칙/사용자 매핑 적용
       setCuteState('kakao',  'done', `${cHit.kRows.length}건`);
@@ -911,8 +918,13 @@
     let kRows = [], gRows = [], nRows = [];
     let kakaoDone = false, googleDone = false;
 
+    // renderPartial 은 매번 mapNaverRows 를 새로 호출 — closure 에 박힌 옛 nRows 가
+    // 아니라 현재 window.naverAllRows 기준으로 최신 데이터를 가져온다.
+    // (visibilitychange 또는 다른 곳에서 업로드된 경우 즉시 반영)
     const renderPartial = () => {
-      cmpRawRows = [...kRows, ...gRows, ...nRows];
+      if (isStale()) return;
+      const freshN = mapNaverRows(start, end);
+      cmpRawRows = [...kRows, ...gRows, ...freshN];
       reclassifyAllRows();
       if (cmpRawRows.length) {
         finalizeAfterFetch(cacheKey);
@@ -981,11 +993,19 @@
       await Promise.allSettled([kakaoPromise, googlePromise]);
       clearTimeout(msgTimer1); clearTimeout(msgTimer2);
 
+      // 다른 fetch 가 그 사이 시작됐으면 이 결과 무시 (race condition 방지)
+      if (isStale()) {
+        loadingEl.classList.add('hidden');
+        return;
+      }
+
       clientCache.set(cacheKey, { kRows, gRows, at: Date.now() });
       savePersistCache();
-      cmpRawRows = [...kRows, ...gRows, ...nRows];
+      // 네이버는 fetch 도중 새로 업로드됐을 수 있으니 마지막에 한 번 더 mapNaverRows
+      const finalN = mapNaverRows(start, end);
+      cmpRawRows = [...kRows, ...gRows, ...finalN];
       reclassifyAllRows();
-      console.log(`[compare] fetched k=${kRows.length} g=${gRows.length} n=${nRows.length}, ${Math.round(performance.now()-t0)}ms`);
+      console.log(`[compare] fetched k=${kRows.length} g=${gRows.length} n=${finalN.length}, ${Math.round(performance.now()-t0)}ms`);
 
       if (cmpRawRows.length === 0) {
         setCuteMsg('😿 데이터가 없어요...');
