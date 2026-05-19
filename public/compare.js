@@ -1723,6 +1723,67 @@
     return { totalSA, totalDA, totalOther, rows: out };
   };
 
+  // 네이버 데이터 흐름 진단 헬퍼 — 차트의 일자별 누락 디버깅용
+  //   사용: __cmpNaverDebug()  → 콘솔에 단계별 출력
+  window.__cmpNaverDebug = function () {
+    const all = window.naverAllRows || [];
+    const range = cmpCurrentRange || {};
+
+    console.group('🟢 [__cmpNaverDebug] 네이버 데이터 흐름 진단');
+    console.log('현재 조회 기간:', range.start, '~', range.end);
+    console.log('window.naverAllRows 총 행수:', all.length);
+
+    // 1) CSV 파싱 결과 — 날짜별 행수 (일/월 구분)
+    const byDateAll = new Map();
+    for (const r of all) {
+      const key = r.date + (r.isMonthly ? '(M)' : '');
+      byDateAll.set(key, (byDateAll.get(key) || 0) + 1);
+    }
+    console.log('📂 1단계: CSV 파싱 결과 — 모든 행의 날짜 분포');
+    console.table([...byDateAll.entries()].sort().map(([date, count]) => ({ date, count })));
+
+    // 2) mapNaverRows 필터링 통과한 행
+    if (range.start && range.end) {
+      const nRows = mapNaverRows(range.start, range.end);
+      console.log(`📊 2단계: mapNaverRows("${range.start}", "${range.end}") 통과한 행수:`, nRows.length);
+      const byDateMapped = new Map();
+      const byDateProfit = new Map();
+      for (const r of nRows) {
+        byDateMapped.set(r.date, (byDateMapped.get(r.date) || 0) + 1);
+        byDateProfit.set(r.date, (byDateProfit.get(r.date) || 0) + (r.profit || 0));
+      }
+      console.table([...byDateMapped.entries()].sort().map(([date, count]) => ({
+        date,
+        rows: count,
+        '수익합': Math.round(byDateProfit.get(date) || 0).toLocaleString() + '원',
+      })));
+    } else {
+      console.warn('⚠️ cmpCurrentRange 가 비어있음 — 통합 조회 먼저 누르세요');
+    }
+
+    // 3) 현재 cmpRawRows 안의 네이버 (실제 화면에 그려지는 것)
+    const cmpNaver = cmpRawRows.filter(r => r.platform === 'naverSA' || r.platform === 'naverDA');
+    const byDateCmp = new Map();
+    const byDateCmpProfit = new Map();
+    for (const r of cmpNaver) {
+      byDateCmp.set(r.date, (byDateCmp.get(r.date) || 0) + 1);
+      byDateCmpProfit.set(r.date, (byDateCmpProfit.get(r.date) || 0) + (r.profit || 0));
+    }
+    console.log('🖼️ 3단계: 실제 화면에 표시되는 cmpRawRows 의 네이버 행수:', cmpNaver.length);
+    console.table([...byDateCmp.entries()].sort().map(([date, count]) => ({
+      date,
+      rows: count,
+      '수익합': Math.round(byDateCmpProfit.get(date) || 0).toLocaleString() + '원',
+    })));
+
+    console.groupEnd();
+    console.log('💡 1단계와 2단계 행수가 다르면: mapNaverRows 필터에서 빠진 것 (날짜 범위 / 카페 필터 등)');
+    console.log('💡 2단계와 3단계 행수가 다르면: race condition 또는 cmpRawRows 갱신 누락');
+    console.log('💡 1단계 자체에 누락 날짜가 있으면: CSV 에 그 날짜 행이 없음 (네이버 리포트 freshness)');
+
+    return { csvRows: all.length, cmpNaverRows: cmpNaver.length, range };
+  };
+
   // ────────────────────────────────────────────────
   // 유닛 선택 즐겨찾기
   //   저장 형식 (localStorage 키: cmp_unit_favorites_v1)
