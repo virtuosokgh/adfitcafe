@@ -386,11 +386,13 @@ function renderSummary(rowsA, rowsB = []) {
     const imp    = rows.reduce((s, r) => s + (r.impression || 0), 0);
     const clk    = rows.reduce((s, r) => s + (r.click      || 0), 0);
     const req    = rows.reduce((s, r) => s + (r.request    || 0), 0);
-    return { profit, imp, clk, req,
+    const resp   = rows.reduce((s, r) => s + (r.response   || 0), 0);
+    return { profit, imp, clk, req, resp,
       ctr:     imp ? ((clk / imp) * 100).toFixed(2) : '0.00',
       impRpm:  imp ? (profit / imp) * 1000 : 0,
       reqRpm:  req ? (profit / req) * 1000 : 0,
       impRate: req ? ((imp / req) * 100).toFixed(2) : '0.00',
+      cpc:     clk ? profit / clk : 0,
     };
   }
 
@@ -426,9 +428,12 @@ function renderSummary(rowsA, rowsB = []) {
   const tA = '기본 필터', tB = '비교 필터';
 
   setEl('total-profit',     won(a.profit),    a.profit,    hasCmp ? won(b.profit)    : '', hasCmp ? b.profit    : 0, tA, tB);
+  setEl('total-request',    comma(a.req),     a.req,       hasCmp ? comma(b.req)     : '', hasCmp ? b.req       : 0, tA, tB);
+  setEl('total-response',   comma(a.resp),    a.resp,      hasCmp ? comma(b.resp)    : '', hasCmp ? b.resp      : 0, tA, tB);
   setEl('total-impression', comma(a.imp),     a.imp,       hasCmp ? comma(b.imp)     : '', hasCmp ? b.imp       : 0, tA, tB);
   setEl('total-click',      comma(a.clk),     a.clk,       hasCmp ? comma(b.clk)     : '', hasCmp ? b.clk       : 0, tA, tB);
   setElNoCopy('total-ctr',  a.ctr + '%',      hasCmp ? b.ctr + '%' : '', tA, tB);
+  setEl('total-cpc',        rpmFmt(a.cpc),    a.cpc,       hasCmp ? rpmFmt(b.cpc)    : '', hasCmp ? b.cpc       : 0, tA, tB);
   setEl('total-imp-rpm',    rpmFmt(a.impRpm), a.impRpm,    hasCmp ? rpmFmt(b.impRpm) : '', hasCmp ? b.impRpm    : 0, tA, tB);
   setEl('total-req-rpm',    rpmFmt(a.reqRpm), a.reqRpm,    hasCmp ? rpmFmt(b.reqRpm) : '', hasCmp ? b.reqRpm    : 0, tA, tB);
   setElNoCopy('total-imp-rate', a.impRate + '%', hasCmp ? b.impRate + '%' : '', tA, tB);
@@ -610,9 +615,12 @@ csvBtn.addEventListener('click', downloadCSV);
 function getMetricValue(row, metric) {
   switch (metric) {
     case 'profit':     return row.profit     || 0;
+    case 'request':    return row.request    || 0;
+    case 'response':   return row.response   || 0;
     case 'impression': return row.impression || 0;
     case 'click':      return row.click      || 0;
     case 'ctr':        return row.impression ? (row.click / row.impression * 100) : 0;
+    case 'cpc':        return row.click      ? (row.profit / row.click) : 0;
     case 'impRpm':     return row.impression ? (row.profit / row.impression * 1000) : 0;
     case 'reqRpm':     return row.request    ? (row.profit / row.request * 1000) : 0;
     case 'impRate':    return row.request    ? (row.impression / row.request * 100) : 0;
@@ -622,9 +630,12 @@ function getMetricValue(row, metric) {
 function getMetricLabel(metric) {
   switch (metric) {
     case 'profit':     return '수익 (원)';
+    case 'request':    return '요청수';
+    case 'response':   return '응답수';
     case 'impression': return '노출수';
     case 'click':      return '클릭수';
     case 'ctr':        return 'CTR (%)';
+    case 'cpc':        return 'CPC (클릭당 수익)';
     case 'impRpm':     return '노출 RPM';
     case 'reqRpm':     return '요청 RPM';
     case 'impRate':    return '노출율 (%)';
@@ -634,10 +645,13 @@ function getMetricLabel(metric) {
 function formatMetricValue(v, metric) {
   switch (metric) {
     case 'profit':     return won(Math.round(v));
+    case 'request':
+    case 'response':
     case 'impression':
     case 'click':      return comma(Math.round(v));
     case 'ctr':
     case 'impRate':    return v.toFixed(2) + '%';
+    case 'cpc':        return v.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + '원';
     case 'impRpm':
     case 'reqRpm':     return comma(Math.round(v)) + '원';
     default: return String(v);
@@ -649,16 +663,17 @@ function renderChart(rowsA, rowsB = []) {
   const hasCmp = rowsB.length > 0;
 
   function buildMap(rows) {
-    // 먼저 날짜별로 profit/impression/click/request 합산 후, 지표값 계산
+    // 먼저 날짜별로 profit/impression/click/request/response 합산 후, 지표값 계산
     const raw = new Map();
     rows.forEach(r => {
       const label = currentPeriod === 'weekly' ? (r._weekLabel || '-') : formatDate(r.day || r.month);
-      if (!raw.has(label)) raw.set(label, { profit: 0, impression: 0, click: 0, request: 0 });
+      if (!raw.has(label)) raw.set(label, { profit: 0, impression: 0, click: 0, request: 0, response: 0 });
       const g = raw.get(label);
       g.profit     += r.profit     || 0;
       g.impression += r.impression || 0;
       g.click      += r.click      || 0;
       g.request    += r.request    || 0;
+      g.response   += r.response   || 0;
     });
     const map = new Map();
     raw.forEach((g, label) => map.set(label, getMetricValue(g, chartMetric)));
