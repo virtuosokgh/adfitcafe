@@ -175,7 +175,7 @@
   }
 
   // MCS 인스턴스
-  let mcsK, mcsG, mcsN;
+  let mcsK, mcsG, mcsN, mcsP;
 
   // flatpickr
   let fpStartD, fpEndD, fpStartW, fpEndW, fpStartM, fpEndM;
@@ -235,6 +235,10 @@
     mcsK = new MultiCheckSelect(document.getElementById('cmp-mcs-kakao'),  '전체 카카오 유닛', () => { onMcsChanged(); renderAll(); });
     mcsG = new MultiCheckSelect(document.getElementById('cmp-mcs-google'), '전체 구글 유닛',   () => { onMcsChanged(); renderAll(); });
     mcsN = new MultiCheckSelect(document.getElementById('cmp-mcs-naver'),  '전체 네이버 유닛', () => { onMcsChanged(); renderAll(); });
+
+    // 광고 플랫폼 필터 — 옵션은 고정 4종 (데이터 도착과 무관하게 항상 선택 가능)
+    mcsP = new MultiCheckSelect(document.getElementById('cmp-mcs-platform'), '전체 플랫폼', () => renderAll());
+    mcsP.refresh(PLATFORMS.map(p => ({ value: p.key, label: p.label })));
 
     // 유닛 즐겨찾기 (저장/불러오기/이름변경/삭제)
     setupFavorites();
@@ -1070,7 +1074,11 @@
     const selK = mcsK ? new Set(mcsK.getSelected()) : new Set();
     const selG = mcsG ? new Set(mcsG.getSelected()) : new Set();
     const selN = mcsN ? new Set(mcsN.getSelected()) : new Set();
+    const selP = mcsP ? new Set(mcsP.getSelected()) : new Set();
     return rows.filter(r => {
+      // 1차: 광고 플랫폼 필터 (선택 없으면 전체)
+      if (selP.size > 0 && !selP.has(r.platform)) return false;
+      // 2차: 플랫폼별 유닛 필터
       if (r.platform === 'kakao')   return selK.size === 0 || selK.has(r.unit);
       if (r.platform === 'google')  return selG.size === 0 || selG.has(r.unit);
       if (r.platform === 'naverSA' || r.platform === 'naverDA')
@@ -1865,6 +1873,7 @@
     if (mcsK) mcsK.setSelected([]);
     if (mcsG) mcsG.setSelected([]);
     if (mcsN) mcsN.setSelected([]);
+    if (mcsP) mcsP.setSelected([]);
     suppressFavTriggerChange = false;
     setSelectedFav('');
     if (cmpRawRows.length) renderAll();
