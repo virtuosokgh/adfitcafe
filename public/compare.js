@@ -1352,23 +1352,28 @@
       pointRadius: 0, pointHoverRadius: 5,
       pointBackgroundColor: g.color,
       borderWidth: 2,
+      _groupKey: g.key,          // 범례 토글 시 합계 재계산에 사용
     }));
 
     // 전체 합계 라인 — 지표에 따라 합산 or eCPM 재계산
-    const totalData = allKeys.map(k => {
+    // gKeys 로 넘긴 그룹만 합산한다 (범례에서 끈 그룹은 제외해야 y축이 줄어듦)
+    const totalOf = (gKeys) => allKeys.map(k => {
       if (meta.isEcpm) {
         let profit = 0, base = 0;
-        visibleGroups.forEach(g => {
-          const b = buckets[g.key][k]; if (!b) return;
+        gKeys.forEach(gk => {
+          const b = buckets[gk][k]; if (!b) return;
           profit += b.profit; base += b[meta.base];
         });
         return base > 0 ? profit / base * 1000 : 0;
       }
-      return visibleGroups.reduce((sum, g) => sum + valueAt(g.key, k), 0);
+      return gKeys.reduce((sum, gk) => sum + valueAt(gk, k), 0);
     });
+    const allGroupKeys = visibleGroups.map(g => g.key);
+    const totalData = totalOf(allGroupKeys);
     series.push({
       label: '전체 합계',
       data: totalData,
+      _isTotal: true,
       borderColor: '#64748B',
       backgroundColor: 'transparent',
       cubicInterpolationMode: 'monotone',
@@ -1394,15 +1399,16 @@
       memosByKey.set(mm.key, arr);
     }
 
-    // y 위치: 차트의 최대값 부근에 띄움 (차트 위쪽 가장자리)
-    const maxValue = Math.max(...series.flatMap(s => s.data.map(v => v ?? 0)), 0);
-    const memoYPos = maxValue > 0 ? maxValue * 1.08 : 1;
-    const memoData = allKeys.map(k => memosByKey.has(k) ? memoYPos : null);
+    // y 위치: 전용 보조축(yMemo, 0~1 고정)의 위쪽에 그린다.
+    // 예전에는 실제 값(최대값×1.08)을 썼는데, 그러면 메모 마커가 메인 y축의
+    // 최대값을 붙잡아서 범례로 그룹을 껐을 때 축이 줄어들지 않았다.
+    const memoData = allKeys.map(k => memosByKey.has(k) ? 0.94 : null);
 
     if (visibleMemos.length) {
       series.push({
         label: '📝 메모',
         data: memoData,
+        yAxisID: 'yMemo',
         type: 'line',
         showLine: false,
         borderColor: 'rgba(245, 158, 11, 0)',
@@ -1446,6 +1452,40 @@
       },
     };
 
+    // 범례에서 그룹을 끄면 '전체 합계'도 남은 그룹만으로 다시 계산한다.
+    // 합계가 그대로면 y축 최대값이 안 줄어들어서 남은 그룹이 계속 바닥에 붙어 보인다.
+    const syncTotalToLegend = (chart) => {
+      const totalDs = chart.data.datasets.find(d => d._isTotal);
+      if (!totalDs) return;
+      const shown = chart.data.datasets
+        .filter((d, i) => d._groupKey && chart.isDatasetVisible(i))
+        .map(d => d._groupKey);
+      // 모든 그룹을 끈 경우엔 빈 차트가 되지 않게 전체 합계를 그대로 둔다
+      totalDs.data = totalOf(shown.length ? shown : allGroupKeys);
+    };
+
+    // y축 시작값 계산 — 보이는 시리즈의 최소값 기준.
+    // 0 고정이면 값이 작은 플랫폼이 계속 바닥에 깔려서 변화가 안 보이고,
+    // 반대로 무조건 데이터에 맞추면 (grace) 축이 음수까지 내려가서 이상하다.
+    const yMinOf = (arrays) => {
+      const vals = arrays.flat().filter(v => v != null && isFinite(v));
+      if (!vals.length) return 0;
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      if (lo <= 0) return 0;                       // 0까지 내려가면 0 기준
+      const pad = (hi - lo) * 0.15;
+      return Math.max(0, pad > 0 ? lo - pad : lo * 0.9);
+    };
+
+    // 범례 토글 후 y축 시작값을 남은 시리즈에 맞춰 다시 잡는다 (메모 보조축은 제외)
+    const syncYRange = (chart) => {
+      const arrays = chart.data.datasets
+        .filter((d, i) => (d.yAxisID || 'y') === 'y' && chart.isDatasetVisible(i))
+        .map(d => d.data);
+      chart.options.scales.y.min = yMinOf(arrays);
+    };
+
+    const initialYMin = yMinOf(series.filter(s => (s.yAxisID || 'y') === 'y').map(s => s.data));
+
     if (cmpTrendChart) cmpTrendChart.destroy();
     let hoveredIdx = null;
     cmpTrendChart = new Chart(document.getElementById('cmp-trend-chart'), {
@@ -1487,6 +1527,15 @@
               useBorderRadius: true, borderRadius: 3,
               font: { size: 12 },
             },
+            // 기본 토글 + 전체 합계 재계산 (y축이 남은 그룹 범위로 다시 잡히도록)
+            onClick: (e, item, legend) => {
+              const chart = legend.chart;
+              const i = item.datasetIndex;
+              chart.setDatasetVisibility(i, !chart.isDatasetVisible(i));
+              syncTotalToLegend(chart);
+              syncYRange(chart);
+              chart.update();
+            },
           },
           tooltip: {
             callbacks: {
@@ -1526,7 +1575,11 @@
                 : { weight: 'normal', size: 12 },
             },
           },
-          y: { beginAtZero: true, ticks: { callback: v => meta.fmt(v) } },
+          // 0 고정 대신 "보이는 데이터 범위"에 맞춤 (min 은 syncYRange 가 관리).
+          // 네이버를 끄면 카카오·구글만 남고, 축도 그 두 개의 범위로 다시 잡힌다.
+          y: { beginAtZero: false, min: initialYMin, grace: '5%', ticks: { callback: v => meta.fmt(v) } },
+          // 메모 마커 전용 보조축 — 화면엔 안 보이고 메인 y축에도 영향 없음
+          yMemo: { display: false, min: 0, max: 1 },
         },
       },
     });
