@@ -1636,7 +1636,11 @@
     }
     const arr = [...map.values()].map(r => ({
       ...r,
-      ctr:  r.impression > 0 ? r.click / r.impression * 100 : 0,
+      // 요청 CTR (클릭 ÷ 요청) — 노출 기준이 아니라 요청 기준.
+      //   플랫폼별로 노출률이 크게 달라(네이버 100% / 애드핏 59% / 구글 53%)
+      //   노출 CTR 로는 지면끼리 비교가 안 되기 때문.
+      //   요청수가 없는 유닛은 계산 불가 → null (표에서 '-')
+      ctr:  r.request > 0 ? r.click / r.request * 100 : null,
       ecpm: r.impression > 0 ? r.profit / r.impression * 1000 : 0,
     }));
     const total = arr.reduce((a, r) => a + r.profit, 0);
@@ -1690,7 +1694,7 @@
         <td class="cmp-cell-num">${r.request > 0 ? num(r.request) : '-'}</td>
         <td class="cmp-cell-num">${num(r.impression)}</td>
         <td class="cmp-cell-num">${num(r.click)}</td>
-        <td class="cmp-cell-num">${pct(r.ctr)}</td>
+        <td class="cmp-cell-num">${r.ctr == null ? '-' : pct(r.ctr)}</td>
         <td class="cmp-cell-num">${krw(r.ecpm)}</td>
         <td class="cmp-cell-num">${pct(r.share)}</td>
       </tr>`;
