@@ -802,9 +802,26 @@
             <button id="cmp-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
           </div>
         </div>
+        <!-- 필터 바: 플랫폼 / 유닛명 / 날짜별 보기 -->
+        <div class="cmp-tbl-filters">
+          <select id="cmp-tbl-platform" class="cmp-tbl-select" title="플랫폼 필터">
+            <option value="">전체 플랫폼</option>
+            <option value="naverSA">🟢 네이버 SA</option>
+            <option value="naverDA">🟪 네이버 DA</option>
+            <option value="google">🔵 구글</option>
+            <option value="kakao">🟡 카카오</option>
+          </select>
+          <input id="cmp-tbl-unit" class="cmp-tbl-input" type="search"
+                 placeholder="🔍 유닛명 검색 (예: 게시글, cafe_Board)" autocomplete="off" />
+          <label class="cmp-tbl-check">
+            <input type="checkbox" id="cmp-tbl-daily" /> 날짜별로 보기
+          </label>
+          <button id="cmp-tbl-reset" type="button" class="cmp-tbl-reset">초기화</button>
+        </div>
         <div class="table-wrapper">
           <table id="cmp-table">
             <colgroup>
+              <col class="cmp-col-date" />
               <col class="cmp-col-platform" />
               <col class="cmp-col-unit" />
               <col class="cmp-col-profit" />
@@ -817,6 +834,7 @@
             </colgroup>
             <thead>
               <tr>
+                <th data-col="date">날짜<span class="sort-icon">↕</span></th>
                 <th data-col="platform">플랫폼<span class="sort-icon">↕</span></th>
                 <th data-col="unit">유닛명<span class="sort-icon">↕</span></th>
                 <th data-col="profit">수익<span class="sort-icon">↕</span></th>

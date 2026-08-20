@@ -1150,6 +1150,67 @@ tbody td:nth-child(3) { text-align: left; }
   width: 100%;
 }
 
+/* ── 유닛별 상세 필터 바 ── */
+.cmp-tbl-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #F8FAFC;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+}
+.cmp-tbl-select, .cmp-tbl-input {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-main);
+  background: #fff;
+  border: 1px solid #D1D5DB;
+  border-radius: 7px;
+}
+.cmp-tbl-input { flex: 1 1 260px; min-width: 180px; }
+.cmp-tbl-select:focus, .cmp-tbl-input:focus {
+  outline: none;
+  border-color: #1A73E8;
+  box-shadow: 0 0 0 3px rgba(26,115,232,.12);
+}
+.cmp-tbl-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-main);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.cmp-tbl-check input { width: 15px; height: 15px; cursor: pointer; accent-color: #1A73E8; }
+.cmp-tbl-reset {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+  background: #fff;
+  border: 1px solid #D1D5DB;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.cmp-tbl-reset:hover { background: #F3F4F6; color: var(--text-main); }
+
+/* 날짜 컬럼: '날짜별로 보기' 를 켜야(.show-date) 보인다 */
+#cmp-table:not(.show-date) th[data-col="date"],
+#cmp-table:not(.show-date) td.cmp-cell-date { display: none; }
+#cmp-table:not(.show-date) col.cmp-col-date { width: 0; }
+#cmp-table.show-date col.cmp-col-date { width: 96px; }
+#cmp-table td.cmp-cell-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+
 /* 컬럼 너비 — 유닛명에 최대한 할당, 숫자 컬럼은 컴팩트 */
 #cmp-table col.cmp-col-platform   { width: 110px; }
 #cmp-table col.cmp-col-unit       { width: auto; }   /* 남는 공간 모두 차지 */

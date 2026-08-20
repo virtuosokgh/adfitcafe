@@ -14,11 +14,19 @@
   // 네이버 서브타입: 한글 '카페' → SA, 영문 'cafe' → DA
   const NAVER_SA_RE = /카페/;
   const NAVER_DA_RE = /cafe/i;
+  // 이름에 '카페'/'cafe' 가 없는 카페 지면 유닛 예외 목록.
+  //   네이버 DA 유닛명이 항상 cafe_ 로 시작하지 않아서, 규칙만으로는 집계에서
+  //   빠진다. 새 카페 지면을 추가하면 여기에 등록해야 대시보드에 잡힌다.
+  const NAVER_DA_EXTRA = [
+    /mobileweb_board_middle_new/i,   // 2026-08 추가: 모바일웹 게시글 중간
+  ];
 
   // 상태
   let cmpPeriod = 'daily';
   let cmpRawRows = [];         // 서버 응답 원본을 합친 것 (platform/unit/date/impression/click/profit)
   let cmpSortState = { col: 'unit', dir: 'asc' };
+  // 유닛별 상세 테이블 필터 상태
+  let tblFilter = { platform: '', unit: '', daily: false };
   let cmpTrendChart = null;
   let cmpPieChart   = null;
   let cmpChartMetric = 'profit';   // profit | request | impression | reqEcpm | impEcpm
@@ -275,6 +283,27 @@
         else { cmpSortState.col = col; cmpSortState.dir = 'desc'; }
         if (cmpRawRows.length) renderAll();
       });
+    });
+
+    // 유닛별 상세 필터 (플랫폼 / 유닛명 / 날짜별)
+    const tblPlatEl  = document.getElementById('cmp-tbl-platform');
+    const tblUnitEl  = document.getElementById('cmp-tbl-unit');
+    const tblDailyEl = document.getElementById('cmp-tbl-daily');
+    const rerenderTable = () => { if (cmpRawRows.length) renderTable(applyUnitFilter(cmpRawRows)); };
+    tblPlatEl?.addEventListener('change', () => { tblFilter.platform = tblPlatEl.value; rerenderTable(); });
+    tblDailyEl?.addEventListener('change', () => { tblFilter.daily = tblDailyEl.checked; rerenderTable(); });
+    // 검색은 입력할 때마다 다시 그리되 과도한 렌더 방지 (디바운스 200ms)
+    let tblUnitTimer = null;
+    tblUnitEl?.addEventListener('input', () => {
+      clearTimeout(tblUnitTimer);
+      tblUnitTimer = setTimeout(() => { tblFilter.unit = tblUnitEl.value; rerenderTable(); }, 200);
+    });
+    document.getElementById('cmp-tbl-reset')?.addEventListener('click', () => {
+      tblFilter = { platform: '', unit: '', daily: false };
+      if (tblPlatEl)  tblPlatEl.value = '';
+      if (tblUnitEl)  tblUnitEl.value = '';
+      if (tblDailyEl) tblDailyEl.checked = false;
+      rerenderTable();
     });
 
     // CSV 다운로드
@@ -759,6 +788,7 @@
     const out = [];
     // 1차 분류 + 범위 체크 (월/일 구분)
     const classify = (adId, media) => {
+      if (NAVER_DA_EXTRA.some(re => re.test(adId))) return 'naverDA';
       if (NAVER_DA_RE.test(adId))   return 'naverDA';
       if (NAVER_SA_RE.test(adId))   return 'naverSA';
       if (NAVER_DA_RE.test(media))  return 'naverDA';
@@ -1620,12 +1650,23 @@
   }
 
   function renderTable(rows) {
-    // 유닛별 집계 (platform + unit). device 는 row 마다 동일하니 첫 row 의 값 채택
+    // 필터: 플랫폼 / 유닛명 검색 / 날짜별 분해
+    const fPlat  = tblFilter.platform;
+    const fUnit  = tblFilter.unit.trim().toLowerCase();
+    const daily  = tblFilter.daily;
+    const tableEl = document.getElementById('cmp-table');
+    if (tableEl) tableEl.classList.toggle('show-date', daily);
+
+    // 집계 키: 기본은 platform+unit(기간 합), 날짜별 모드면 날짜까지 쪼갠다.
+    // device 는 row 마다 동일하니 첫 row 의 값 채택
     const map = new Map();
     for (const r of rows) {
-      const key = `${r.platform}::${r.unit}`;
+      if (fPlat && r.platform !== fPlat) continue;
+      if (fUnit && !String(r.unit).toLowerCase().includes(fUnit)) continue;
+      const key = daily ? `${r.platform}::${r.unit}::${r.date}` : `${r.platform}::${r.unit}`;
       const prev = map.get(key) || {
         platform: r.platform, unit: r.unit, device: r.device || 'other',
+        date: daily ? r.date : '',
         request: 0, impression: 0, click: 0, profit: 0,
       };
       prev.request    += (r.request || 0);
@@ -1660,8 +1701,12 @@
       if (ga !== gb) return ga - gb;
       const useCol = col || 'unit';
       const va = a[useCol], vb = b[useCol];
-      if (typeof va === 'string') return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      return dir === 'asc' ? va - vb : vb - va;
+      let cmp;
+      if (typeof va === 'string') cmp = dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      else cmp = dir === 'asc' ? va - vb : vb - va;
+      // 날짜별 모드에서 정렬 키가 같으면 (유닛명 정렬 등) 날짜 오름차순으로 2차 정렬
+      if (cmp === 0 && daily && useCol !== 'date') return a.date.localeCompare(b.date);
+      return cmp;
     });
 
     const platformBadge = p => ({
@@ -1679,7 +1724,9 @@
     // 그룹 첫 행에 구분선 클래스 추가 (모드에 따라 platform/device 둘 다 가능)
     let prevGroup = null;
     document.getElementById('cmp-table-body').innerHTML = arr.map(r => {
-      const groupVal = useDeviceGroup ? r.device : r.platform;
+      const groupVal = daily
+        ? `${useDeviceGroup ? r.device : r.platform}::${r.unit}`
+        : (useDeviceGroup ? r.device : r.platform);
       const isGroupStart = groupVal !== prevGroup;
       prevGroup = groupVal;
       // 기기 모드에서는 플랫폼 셀 자리에 기기 배지를 우선 표시 + 플랫폼 작게 부가
@@ -1688,6 +1735,7 @@
         : platformBadge(r.platform);
       return `
       <tr class="cmp-row-${r.platform}${isGroupStart ? ' cmp-group-start' : ''}">
+        <td class="cmp-cell-date">${r.date || '-'}</td>
         <td class="cmp-cell-platform">${platformCell}</td>
         <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
         <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
@@ -1700,11 +1748,20 @@
       </tr>`;
     }).join('');
 
-    document.getElementById('cmp-row-count').textContent = `${arr.length}개 유닛`;
+    const unitCount = new Set(arr.map(r => `${r.platform}::${r.unit}`)).size;
+    document.getElementById('cmp-row-count').textContent = daily
+      ? `${unitCount}개 유닛 · ${arr.length}행 (유닛×날짜)`
+      : `${arr.length}개 유닛`;
   }
 
   function downloadCsv() {
-    const rows = applyUnitFilter(cmpRawRows);
+    // 테이블 필터(플랫폼/유닛명)를 그대로 반영. CSV 는 항상 날짜별 원본 행 단위.
+    const rows = applyUnitFilter(cmpRawRows).filter(r => {
+      if (tblFilter.platform && r.platform !== tblFilter.platform) return false;
+      const q = tblFilter.unit.trim().toLowerCase();
+      if (q && !String(r.unit).toLowerCase().includes(q)) return false;
+      return true;
+    });
     if (!rows.length) return;
     const platMap = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
     const header = ['플랫폼','유닛명','날짜','요청수','노출수','클릭수','수익(원)'];
