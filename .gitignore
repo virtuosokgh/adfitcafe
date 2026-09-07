@@ -4,3 +4,4 @@ credentials/
 .env
 .env.local
 .vercel
+.cache/

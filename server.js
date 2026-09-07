@@ -188,17 +188,58 @@ async function loadBlobSdk() {
   catch { return null; }
 }
 
-// private blob 을 읽어 문자열로 반환. 없으면 null.
-async function readBlobText(blob, pathname) {
+// private blob 을 읽어 문자열로 반환.
+//   - 진짜 파일이 없으면 null
+//   - 503/5xx/429 같은 일시적 오류는 재시도하고, 끝까지 실패하면 throw
+//
+// 이전에는 일시적 오류도 null 로 뭉개서 API 가 {exists:false} 를 반환했다.
+// 그래서 업로드는 정상인데 화면에 '업로드 없음' 으로 뜨는 문제가 있었다.
+// (Vercel Blob 이 간헐적으로 503 을 낸다)
+// ── 저장소 장애 대비 로컬 폴백 캐시 ────────────────────────────
+//   Vercel Blob 의 private 다운로드 엔드포인트가 간헐적으로 503 을 낸다.
+//   (list/head 는 되는데 get 만 실패하는 케이스 확인됨)
+//   마지막으로 성공한 CSV/메타를 디스크에 저장해두고, 조회 실패 시 그걸 내려준다.
+const FALLBACK_DIR = path.join(__dirname, '.cache');
+const fallbackPath = key => path.join(FALLBACK_DIR, key.replace(/[\/]/g, '_'));
+function saveFallback(key, text) {
   try {
-    const result = await blob.get(pathname, { access: BLOB_ACCESS });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
-    return await new Response(result.stream).text();
-  } catch (err) {
-    if (err?.name === 'BlobNotFoundError') return null;
-    console.error(`readBlobText(${pathname}) failed:`, err);
-    return null;
+    fs.mkdirSync(FALLBACK_DIR, { recursive: true });
+    fs.writeFileSync(fallbackPath(key), text, 'utf8');
+  } catch (e) { console.warn('fallback 저장 실패:', e.message); }
+}
+function readFallback(key) {
+  try {
+    const f = fallbackPath(key);
+    if (!fs.existsSync(f)) return null;
+    return { text: fs.readFileSync(f, 'utf8'), at: fs.statSync(f).mtimeMs };
+  } catch { return null; }
+}
+
+const BLOB_RETRIES = 3;
+function isTransientBlobError(err) {
+  const m = String(err?.message || '');
+  return /50\d|429|408|ECONN|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|aborted|timeout/i.test(m);
+}
+async function readBlobText(blob, pathname) {
+  let lastErr = null;
+  for (let i = 0; i < BLOB_RETRIES; i++) {
+    try {
+      const result = await blob.get(pathname, { access: BLOB_ACCESS });
+      if (!result || result.statusCode !== 200 || !result.stream) return null;
+      const text = await new Response(result.stream).text();
+      saveFallback(pathname, text);   // 성공본 보관
+      return text;
+    } catch (err) {
+      if (err?.name === 'BlobNotFoundError') return null;   // 진짜 없음
+      lastErr = err;
+      if (!isTransientBlobError(err) || i === BLOB_RETRIES - 1) break;
+      const backoff = 300 * 2 ** i + Math.floor(Math.random() * 200);
+      console.warn(`[blob][retry] ${pathname} ${i + 1}/${BLOB_RETRIES} (${err.message}) → ${backoff}ms 후 재시도`);
+      await new Promise(r => setTimeout(r, backoff));
+    }
   }
+  console.error(`readBlobText(${pathname}) failed:`, lastErr);
+  throw lastErr;   // 호출부가 '없음' 과 '실패' 를 구분할 수 있게
 }
 
 app.post('/api/naver-csv', async (req, res) => {
@@ -221,6 +262,7 @@ app.post('/api/naver-csv', async (req, res) => {
       allowOverwrite: true,
       cacheControlMaxAge: 0,
     });
+    saveFallback(CSV_KEY, csv);   // 업로드 직후 조회가 실패해도 버티도록
     const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length };
     await blob.put(META_KEY, JSON.stringify(metaPayload), {
       access: BLOB_ACCESS,
@@ -237,15 +279,22 @@ app.post('/api/naver-csv', async (req, res) => {
 });
 
 app.get('/api/naver-csv', async (req, res) => {
+  // CSV 는 업로드하면 즉시 반영되어야 한다.
+  //   Express 가 자동으로 붙이는 ETag 때문에 조건부 요청이 304 로 떨어지면
+  //   브라우저/프록시가 옛 CSV 를 그대로 쓰게 된다. (Vercel 쪽 api/naver-csv.js 와 동일하게 맞춤)
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  req.app.set('etag', false);
   const blob = await loadBlobSdk();
   if (!blob) return res.status(500).json({ error: '@vercel/blob 미설치' });
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN 미설정 (.env.local 확인)' });
   }
   try {
+    // CSV 는 필수, meta 는 없어도 동작 → meta 실패는 무시한다.
     const [csvText, metaText] = await Promise.all([
       readBlobText(blob, CSV_KEY),
-      readBlobText(blob, META_KEY),
+      readBlobText(blob, META_KEY).catch(() => null),
     ]);
     if (!csvText) return res.json({ exists: false });
     let meta = null;
@@ -259,8 +308,29 @@ app.get('/api/naver-csv', async (req, res) => {
       csv: csvText,
     });
   } catch (err) {
+    // 여기로 오면 CSV 읽기가 재시도까지 실패한 것.
+    // 마지막 성공본이 디스크에 있으면 그걸 내려준다 (stale 표시).
     console.error('Blob fetch failed:', err);
-    res.status(500).json({ error: err.message });
+    const fb = readFallback(CSV_KEY);
+    if (fb?.text) {
+      let meta = null;
+      const fbMeta = readFallback(META_KEY);
+      if (fbMeta?.text) { try { meta = JSON.parse(fbMeta.text); } catch {} }
+      console.warn(`[naver-csv] 저장소 실패 → 로컬 폴백본 사용 (${new Date(fb.at).toLocaleString('ko-KR')})`);
+      return res.json({
+        exists: true,
+        stale: true,
+        staleReason: `저장소 조회 실패(${err?.message || 'unknown'}) — 마지막 성공본으로 응답`,
+        cachedAt: fb.at,
+        fileName:   meta?.fileName   || 'naver.csv',
+        uploader:   meta?.uploader   || '',
+        uploadedAt: meta?.uploadedAt || null,
+        bytes: fb.text.length,
+        csv: fb.text,
+      });
+    }
+    // {exists:false} 로 내리면 '업로드 없음' 으로 오해하니 명확히 에러로 알린다.
+    res.status(503).json({ error: `저장소 조회 실패: ${err?.message || 'unknown'}`, transient: true });
   }
 });
 

@@ -57,18 +57,35 @@ async function readBodyAsString(req, maxBytes) {
   });
 }
 
-// private blob 을 서버에서 읽어 문자열로 반환. 없으면 null.
+// private blob 을 서버에서 읽어 문자열로 반환.
+//   - 파일이 진짜 없으면 null
+//   - 503/5xx/429 등 일시적 오류는 재시도하고, 끝까지 실패하면 throw
+//
+// 이전에는 일시적 오류도 null 로 처리해서 API 가 {exists:false} 를 반환했다.
+// 그 결과 업로드는 됐는데 화면에는 '업로드 없음' 으로 뜨는 문제가 있었다.
+const BLOB_RETRIES = 3;
+function isTransientBlobError(err) {
+  const m = String(err?.message || '');
+  return /50\d|429|408|ECONN|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|aborted|timeout/i.test(m);
+}
 async function readBlobText(pathname) {
-  try {
-    const result = await get(pathname, { access: ACCESS });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
-    return await new Response(result.stream).text();
-  } catch (err) {
-    // not found 는 조용히 null
-    if (err?.name === 'BlobNotFoundError') return null;
-    console.error(`readBlobText(${pathname}) failed:`, err);
-    return null;
+  let lastErr = null;
+  for (let i = 0; i < BLOB_RETRIES; i++) {
+    try {
+      const result = await get(pathname, { access: ACCESS });
+      if (!result || result.statusCode !== 200 || !result.stream) return null;
+      return await new Response(result.stream).text();
+    } catch (err) {
+      if (err?.name === 'BlobNotFoundError') return null;   // 진짜 없음
+      lastErr = err;
+      if (!isTransientBlobError(err) || i === BLOB_RETRIES - 1) break;
+      const backoff = 300 * 2 ** i + Math.floor(Math.random() * 200);
+      console.warn(`[blob][retry] ${pathname} ${i + 1}/${BLOB_RETRIES} (${err.message})`);
+      await new Promise(r => setTimeout(r, backoff));
+    }
   }
+  console.error(`readBlobText(${pathname}) failed:`, lastErr);
+  throw lastErr;
 }
 
 export default async function handler(req, res) {
@@ -117,9 +134,10 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
+      // CSV 는 필수, meta 는 없어도 동작 → meta 실패는 무시
       const [csvText, metaText] = await Promise.all([
         readBlobText(CSV_KEY),
-        readBlobText(META_KEY),
+        readBlobText(META_KEY).catch(() => null),
       ]);
 
       if (!csvText) return res.status(200).json({ exists: false });
@@ -150,6 +168,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
     console.error('naver-csv handler error:', err);
+    // 저장소 일시 장애는 503 으로 명확히 구분해서 알린다.
+    //   {exists:false} 로 내리면 클라이언트가 '업로드 없음' 으로 오해한다.
+    if (isTransientBlobError(err)) {
+      return res.status(503).json({ error: `저장소 조회 실패: ${err?.message || 'unknown'}`, transient: true });
+    }
     return res.status(500).json({ error: err?.message || 'server error' });
   }
 }

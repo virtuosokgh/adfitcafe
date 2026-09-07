@@ -466,9 +466,11 @@
   }
 
   // 서버 Vercel Blob 에서 최신 CSV 가져오기 (모든 유저 공유)
+  // 반환: true(성공) | false(업로드 없음) | 'error'(저장소 조회 실패)
   async function loadFromServer() {
     if (!window.naverShared) return false;
     const data = await window.naverShared.fetchLatest();
+    if (data && data.__error) return 'error';
     if (!data || !data.csv) return false;
     const fresh = parseNaverCsv(data.csv);
     if (!fresh.length) return false;
@@ -523,8 +525,18 @@
 
   async function loadNaverFromCache() {
     const ok = await loadFromServer();
-    if (ok) return;
+    if (ok === true) return;
+    // 서버 조회 실패면 로컬 캐시로 버티되, '업로드 없음' 과 구분해서 알린다.
     if (loadFromLocalCache()) return;
+    if (ok === 'error') {
+      const el = document.getElementById('cmp-naver-status');
+      if (el) {
+        el.textContent = '⚠️ 네이버 CSV 저장소 조회 실패 — 새로고침하거나 다시 업로드해주세요';
+        el.classList.remove('has-data');
+        el.title = '업로드가 안 된 것이 아니라 저장소(Vercel Blob)에서 읽기가 실패한 상태입니다.';
+      }
+      return;
+    }
     syncNaverStatus();
   }
 
@@ -554,11 +566,19 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
     loadFromServer().then(ok => {
-      if (!ok) return;
+      if (ok !== true) return;
       rebuildNaverInCmpRawRows();
       if (cmpRawRows.length) renderAll();
     }).catch(() => {});
   });
+
+  // CSV 안의 일별 데이터가 며칠까지 들어있는지 (월단위 -00 행 제외)
+  function naverDataRange(rows) {
+    const ds = rows.filter(r => r && !r.isMonthly && /^\d{4}-\d{2}-\d{2}$/.test(r.date || ''))
+                   .map(r => r.date).sort();
+    if (!ds.length) return null;
+    return { first: ds[0], last: ds[ds.length - 1] };
+  }
 
   function syncNaverStatus(fileName, uploadedAt, source) {
     const rows = window.naverAllRows || [];
@@ -566,10 +586,23 @@
     const resetBtn = document.getElementById('cmp-naver-reset-btn');
     if (rows.length > 0) {
       const timeStr = window.naverShared?.formatUploadedAt(uploadedAt) || '';
-      const tag = source === 'server' ? '🌐 공유' : '💾 로컬';
+      const tag = source === 'server' ? '🌐 공유' : '💾 로컬(서버 조회 실패)';
+      // '업로드 시각' 보다 '데이터가 며칠까지 있는지' 가 실제로 중요하다.
+      //   업로드는 했는데 리포트에 최근 날짜가 없어서 "반영 안 됨" 으로 오해하는 경우가 많음.
+      const rng = naverDataRange(rows);
+      let dataStr = '';
+      if (rng) {
+        const md = d => d.slice(5).replace('-', '/');
+        const lag = Math.round((Date.now() - new Date(rng.last + 'T00:00:00')) / 86400000);
+        const warn = lag >= 3 ? ' ⚠️' : '';
+        dataStr = ` · 📅 데이터 ~${md(rng.last)}${lag >= 1 ? `(${lag}일 전)` : '(오늘)'}${warn}`;
+      }
       statusEl.textContent = fileName
-        ? `✅ ${fileName} (${rows.length}건) · ${tag}${timeStr ? ' ' + timeStr : ''}`
-        : `✅ 네이버 데이터 ${rows.length}건 · ${tag}${timeStr ? ' ' + timeStr : ''}`;
+        ? `✅ ${fileName} (${rows.length}건) · ${tag}${timeStr ? ' ' + timeStr : ''}${dataStr}`
+        : `✅ 네이버 데이터 ${rows.length}건 · ${tag}${timeStr ? ' ' + timeStr : ''}${dataStr}`;
+      statusEl.title = rng
+        ? `일별 데이터 범위: ${rng.first} ~ ${rng.last}\n업로드: ${new Date(uploadedAt || Date.now()).toLocaleString('ko-KR')}\n출처: ${source === 'server' ? '서버 공유본' : '내 브라우저 로컬 캐시'}`
+        : '';
       statusEl.classList.add('has-data');
       resetBtn.classList.remove('hidden');
     } else {

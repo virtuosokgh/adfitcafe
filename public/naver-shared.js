@@ -14,16 +14,39 @@
 
   const API = '/api/naver-csv';
 
+  // 최신 CSV 조회.
+  //   반환: 정상 → { fileName, uploader, uploadedAt, bytes, csv }
+  //         파일 없음 → null
+  //         조회 실패 → { __error: true, status, message }
+  //
+  // Vercel Blob 이 간헐적으로 503 을 내므로 5xx/네트워크 오류는 재시도한다.
+  // (재시도 없이 실패하면 화면에 '업로드 없음' 으로 떠서 업로드가 안 된 것처럼 보였음)
   async function fetchLatest() {
-    try {
-      const res = await fetch(API, { cache: 'no-store' });
-      if (!res.ok) return null;
-      const j = await res.json();
-      if (!j.exists) return null;
-      return j;    // { fileName, uploader, uploadedAt, bytes, csv }
-    } catch {
-      return null;
+    const RETRIES = 3;
+    let lastMsg = '', lastStatus = 0;
+    for (let i = 0; i < RETRIES; i++) {
+      try {
+        const res = await fetch(API, { cache: 'no-store' });
+        if (res.ok) {
+          const j = await res.json();
+          if (!j.exists) return null;         // 진짜 업로드 없음
+          return j;
+        }
+        lastStatus = res.status;
+        try { lastMsg = (await res.json())?.error || `HTTP ${res.status}`; }
+        catch { lastMsg = `HTTP ${res.status}`; }
+        if (res.status < 500 && res.status !== 429) break;   // 재시도 의미 없는 오류
+      } catch (e) {
+        lastMsg = e?.message || 'network error';
+      }
+      if (i < RETRIES - 1) {
+        const backoff = 400 * 2 ** i + Math.floor(Math.random() * 200);
+        console.warn(`[naver-csv][retry] ${i + 1}/${RETRIES} (${lastMsg}) → ${backoff}ms`);
+        await new Promise(r => setTimeout(r, backoff));
+      }
     }
+    console.error('naver CSV 조회 실패:', lastMsg);
+    return { __error: true, status: lastStatus, message: lastMsg };
   }
 
   async function upload(file, csvText) {
