@@ -2326,3 +2326,14 @@ tbody td:nth-child(3) { text-align: left; }
   padding-left: 9px;
   border-left: 3px solid #03C75A;
 }
+
+/* 월별 성과 — 조회 기간 안내 */
+.cmv-warn {
+  padding: 10px 13px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: #92400E;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 9px;
+}

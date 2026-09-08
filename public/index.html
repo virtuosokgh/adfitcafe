@@ -892,6 +892,55 @@
           </table>
         </div>
       </div>
+
+      <!-- ▶ 유닛별 월별 성과 (플랫폼 통합) — 유닛 나란히 비교 -->
+      <div class="table-section" id="cmv-section" style="display:none;">
+        <div class="table-header-row">
+          <h2>유닛별 월별 성과 <span class="nvm-sub">플랫폼 통합 · 조회 기간 기준</span></h2>
+          <div class="table-header-right">
+            <span id="cmv-count"></span>
+            <button id="cmv-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+
+        <div class="cmp-tbl-filters">
+          <select id="cmv-metric" class="cmp-tbl-select" title="비교 지표">
+            <option value="impEcpm">노출 eCPM</option>
+            <option value="reqEcpm">요청 eCPM</option>
+            <option value="profit">매출</option>
+            <option value="ctr">요청 CTR</option>
+            <option value="fill">노출률</option>
+            <option value="impression">노출수</option>
+            <option value="click">클릭수</option>
+            <option value="reqPerDay">일평균 요청</option>
+          </select>
+          <select id="cmv-platform" class="cmp-tbl-select" title="플랫폼 필터">
+            <option value="">전체 플랫폼</option>
+            <option value="naverSA">🟢 네이버 SA</option>
+            <option value="naverDA">🟪 네이버 DA</option>
+            <option value="google">🔵 구글</option>
+            <option value="kakao">🟡 카카오</option>
+          </select>
+          <input id="cmv-search" class="cmp-tbl-input" type="search"
+                 placeholder="🔍 유닛명 검색" autocomplete="off" />
+          <button id="cmv-reset" type="button" class="cmp-tbl-reset">선택 해제</button>
+        </div>
+
+        <div id="cmv-warn" class="cmv-warn" style="display:none;"></div>
+        <div id="cmv-ids" class="nvm-ids"></div>
+
+        <div class="nvm-block">
+          <h3 class="nvm-h3">📊 지표 비교 <span id="cmv-metric-label"></span></h3>
+          <div class="table-wrapper">
+            <table id="cmv-pivot" class="nvm-table"><thead></thead><tbody></tbody></table>
+          </div>
+        </div>
+
+        <div class="nvm-block">
+          <h3 class="nvm-h3">📋 유닛별 상세</h3>
+          <div id="cmv-details"></div>
+        </div>
+      </div>
     </div><!-- /compare-section -->
 
   </div><!-- /container -->

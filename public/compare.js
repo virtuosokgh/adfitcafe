@@ -307,6 +307,9 @@
       rerenderTable();
     });
 
+    // 유닛별 월별 성과 (플랫폼 통합)
+    cmvBind();
+
     // CSV 다운로드
     document.getElementById('cmp-csv-btn').addEventListener('click', downloadCsv);
 
@@ -599,7 +602,9 @@
       let dataStr = '';
       if (rng) {
         const md = d => d.slice(5).replace('-', '/');
-        const lag = Math.round((Date.now() - new Date(rng.last + 'T00:00:00')) / 86400000);
+        // 날짜 기준으로 계산 (시각 차이로 하루가 앞당겨 표시되지 않게)
+        const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+        const lag = Math.round((t0 - new Date(rng.last + 'T00:00:00')) / 86400000);
         const warn = lag >= 3 ? ' ⚠️' : '';
         dataStr = ` · 📅 데이터 ~${md(rng.last)}${lag >= 1 ? `(${lag}일 전)` : '(오늘)'}${warn}`;
       }
@@ -1170,7 +1175,244 @@
     renderTrendChart(rows);
     renderPieChart(rows);
     renderTable(rows);
+    cmvRender();
   }
+
+  // ══════════════════════════════════════════════════════════════
+  // 유닛별 월별 성과 (플랫폼 통합) — 유닛 나란히 비교
+  //   데이터: cmpRawRows (조회한 기간의 카카오+구글+네이버 통합 행)
+  //   매출 기준은 각 플랫폼 정산 기준(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)
+  //   → 네이버 '유상매출' 기준은 네이버 탭의 '광고ID별 월별 성과' 에서 확인
+  // ══════════════════════════════════════════════════════════════
+  const CMV_PALETTE = ['#03C75A', '#1A73E8', '#A855F7', '#F59E0B', '#EF4444', '#0EA5E9'];
+  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '' };
+  let cmvSeeded = false;
+
+  const CMV_METRICS = {
+    impEcpm:   { label: '노출 eCPM',   fmt: v => krw(v),             calc: a => a.imp ? a.profit / a.imp * 1000 : 0 },
+    reqEcpm:   { label: '요청 eCPM',   fmt: v => krw(v),             calc: a => a.req ? a.profit / a.req * 1000 : 0 },
+    profit:    { label: '매출',        fmt: v => krw(v),             calc: a => a.profit },
+    ctr:       { label: '요청 CTR',    fmt: v => v.toFixed(3) + '%', calc: a => a.req ? a.clk / a.req * 100 : 0 },
+    fill:      { label: '노출률',      fmt: v => v.toFixed(1) + '%', calc: a => a.req ? a.imp / a.req * 100 : 0 },
+    impression:{ label: '노출수',      fmt: v => num(v),             calc: a => a.imp },
+    click:     { label: '클릭수',      fmt: v => num(v),             calc: a => a.clk },
+    reqPerDay: { label: '일평균 요청', fmt: v => num(Math.round(v)),  calc: a => a.days ? a.req / a.days : 0 },
+  };
+  const CMV_PLAT = { kakao: '🟡 카카오', google: '🔵 구글', naverSA: '🟢 네이버 SA', naverDA: '🟪 네이버 DA' };
+
+  const cmvBlank = () => ({ req: 0, imp: 0, clk: 0, profit: 0, days: 0 });
+
+  // 유닛(플랫폼::유닛명) × 월 집계
+  function cmvAggregate() {
+    const byKey = new Map();
+    for (const r of cmpRawRows) {
+      if (!r.date) continue;
+      const key = `${r.platform}::${r.unit}`;
+      let e = byKey.get(key);
+      if (!e) { e = { key, platform: r.platform, unit: r.unit, total: cmvBlank(), months: new Map() }; byKey.set(key, e); }
+      const m = String(r.date).slice(0, 7);
+      let a = e.months.get(m);
+      if (!a) { a = cmvBlank(); a.dates = new Set(); e.months.set(m, a); }
+      const put = t => { t.req += r.request || 0; t.imp += r.impression || 0; t.clk += r.click || 0; t.profit += r.profit || 0; };
+      put(a); put(e.total); a.dates.add(r.date);
+    }
+    for (const e of byKey.values()) for (const a of e.months.values()) a.days = a.dates.size;
+    return byKey;
+  }
+
+  function cmvRender() {
+    const sec = document.getElementById('cmv-section');
+    if (!sec) return;
+    if (!cmpRawRows.length) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    const byKey = cmvAggregate();
+
+    // 조회 기간이 1~2개월이면 월별 비교 의미가 약함 → 안내
+    const months = [...new Set(cmpRawRows.map(r => String(r.date).slice(0, 7)))].sort();
+    const warn = document.getElementById('cmv-warn');
+    if (warn) {
+      const msgs = [];
+      if (months.length <= 1) {
+        msgs.push(`조회 기간이 <strong>${months[0] || '-'}</strong> 한 달뿐이라 월별 추이 비교가 안 됩니다. ` +
+          `위에서 기간을 <strong>3개월 이상</strong>으로 늘려 다시 조회해 주세요.`);
+      }
+      // 카카오 API 는 일별 조회가 90일까지만 허용된다 → 넘으면 카카오가 조용히 빠진다
+      const have = new Set(cmpRawRows.map(r => r.platform));
+      const missing = [];
+      if (!have.has('kakao')) missing.push('카카오');
+      if (!have.has('google')) missing.push('구글');
+      if (!have.has('naverSA') && !have.has('naverDA')) missing.push('네이버');
+      if (missing.length) {
+        let extra = '';
+        if (missing.includes('카카오') && cmpCurrentRange?.start && cmpCurrentRange?.end) {
+          const days = Math.round((new Date(cmpCurrentRange.end) - new Date(cmpCurrentRange.start)) / 86400000) + 1;
+          if (days > 90) extra = ` 카카오 API 는 일별 조회를 <strong>90일까지</strong>만 허용합니다 (현재 ${days}일).`;
+        }
+        msgs.push(`⚠️ <strong>${missing.join('·')}</strong> 데이터가 조회 결과에 없어 비교에서 빠집니다.${extra}`);
+      }
+      if (msgs.length) { warn.style.display = ''; warn.innerHTML = msgs.join('<br/>'); }
+      else warn.style.display = 'none';
+    }
+
+    cmvRenderChips(byKey);
+    if (!cmvSeeded) {
+      cmvSeeded = true;
+      cmvState.selected = [...byKey.values()].sort((a, b) => b.total.profit - a.total.profit)
+        .slice(0, 2).map(e => e.key);
+      cmvRenderChips(byKey);
+    }
+    cmvRenderPivot(byKey, months);
+    cmvRenderDetails(byKey);
+    const el = document.getElementById('cmv-count');
+    if (el) el.textContent = `유닛 ${byKey.size}개 · 선택 ${cmvState.selected.length}개 · ${months.length}개월`;
+  }
+
+  function cmvRenderChips(byKey) {
+    const box = document.getElementById('cmv-ids');
+    if (!box) return;
+    const q = cmvState.search.trim().toLowerCase();
+    const list = [...byKey.values()]
+      .filter(e => !cmvState.platform || e.platform === cmvState.platform)
+      .filter(e => !q || e.unit.toLowerCase().includes(q))
+      .sort((a, b) => b.total.profit - a.total.profit);
+    box.innerHTML = list.map(e => {
+      const on = cmvState.selected.includes(e.key);
+      const color = on ? CMV_PALETTE[cmvState.selected.indexOf(e.key) % CMV_PALETTE.length] : '';
+      return `<span class="nvm-chip${on ? ' on' : ''}" data-key="${cmvEsc(e.key)}"
+        ${on ? `style="background:${color};"` : ''}>${CMV_PLAT[e.platform] || e.platform} ${cmvEsc(e.unit.slice(0, 34))}
+        <span class="nvm-chip-rev">${krw(e.total.profit)}</span></span>`;
+    }).join('') || '<span class="nvm-hint">조건에 맞는 유닛이 없습니다</span>';
+  }
+
+  function cmvRenderPivot(byKey, allMonths) {
+    const tbl = document.getElementById('cmv-pivot');
+    const lbl = document.getElementById('cmv-metric-label');
+    const M = CMV_METRICS[cmvState.metric];
+    if (lbl) lbl.textContent = `— ${M.label}`;
+    if (!tbl) return;
+    const sel = cmvState.selected.filter(k => byKey.has(k));
+    if (!sel.length) {
+      tbl.querySelector('thead').innerHTML = '';
+      tbl.querySelector('tbody').innerHTML =
+        `<tr><td><div class="nvm-empty">아래에서 유닛을 선택하면 월별로 나란히 비교됩니다</div></td></tr>`;
+      return;
+    }
+    const months = allMonths.filter(m => sel.some(k => byKey.get(k).months.has(m)));
+    tbl.querySelector('thead').innerHTML =
+      `<tr><th>월</th>${sel.map((k, i) => {
+        const e = byKey.get(k);
+        return `<th class="nvm-grp" style="background:${CMV_PALETTE[i % CMV_PALETTE.length]}">${CMV_PLAT[e.platform] || ''}<br/>${cmvEsc(e.unit.slice(0, 30))}</th>`;
+      }).join('')}</tr>`;
+    tbl.querySelector('tbody').innerHTML = months.map((m, mi) => {
+      const cells = sel.map(k => {
+        const a = byKey.get(k).months.get(m);
+        if (!a) return `<td class="nvm-bd">-</td>`;
+        const v = M.calc(a);
+        let delta = '';
+        if (mi > 0) {
+          const prev = byKey.get(k).months.get(months[mi - 1]);
+          if (prev) {
+            const pv = M.calc(prev);
+            if (pv > 0) {
+              const d = (v / pv - 1) * 100;
+              if (Math.abs(d) >= 0.5)
+                delta = `<span class="${d > 0 ? 'nvm-up' : 'nvm-down'}">${d > 0 ? '▲' : '▼'}${Math.abs(d).toFixed(1)}%</span>`;
+            }
+          }
+        }
+        return `<td class="nvm-bd">${M.fmt(v)}${delta}</td>`;
+      }).join('');
+      return `<tr><td>${m}</td>${cells}</tr>`;
+    }).join('');
+  }
+
+  function cmvRenderDetails(byKey) {
+    const box = document.getElementById('cmv-details');
+    if (!box) return;
+    const sel = cmvState.selected.filter(k => byKey.has(k));
+    if (!sel.length) { box.innerHTML = `<div class="nvm-empty">유닛을 선택하면 상세 표가 나옵니다</div>`; return; }
+    box.innerHTML = sel.map((k, i) => {
+      const e = byKey.get(k);
+      const ms = [...e.months.keys()].sort();
+      const tot = cmvBlank();
+      ms.forEach(m => { const a = e.months.get(m); tot.req += a.req; tot.imp += a.imp; tot.clk += a.clk; tot.profit += a.profit; tot.days += a.days; });
+      const row = (label, a) => `<tr>
+        <td>${label}</td><td>${num(a.days)}</td><td>${num(Math.round(a.days ? a.req / a.days : 0))}</td>
+        <td>${num(Math.round(a.req))}</td><td>${num(Math.round(a.imp))}</td>
+        <td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>
+        <td>${num(Math.round(a.clk))}</td>
+        <td>${a.req ? (a.clk / a.req * 100).toFixed(3) : '0.000'}%</td>
+        <td>${krw(a.imp ? a.profit / a.imp * 1000 : 0)}</td>
+        <td>${krw(a.req ? a.profit / a.req * 1000 : 0)}</td>
+        <td>${krw(a.profit)}</td></tr>`;
+      return `
+      <div class="nvm-detail-title" style="border-left-color:${CMV_PALETTE[i % CMV_PALETTE.length]}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit)}</div>
+      <div class="table-wrapper">
+        <table class="nvm-table">
+          <thead><tr>
+            <th>월</th><th>일수</th><th>일평균 요청</th><th>요청수</th><th>노출수</th><th>노출률</th>
+            <th>클릭</th><th>요청 CTR</th><th>노출 eCPM</th><th>요청 eCPM</th><th>매출</th>
+          </tr></thead>
+          <tbody>${ms.map(m => row(m, e.months.get(m))).join('')}</tbody>
+          <tfoot>${row('합계', tot)}</tfoot>
+        </table>
+      </div>`;
+    }).join('');
+  }
+
+  const cmvEsc = s => String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function cmvDownloadCsv() {
+    const byKey = cmvAggregate();
+    const sel = cmvState.selected.filter(k => byKey.has(k));
+    const keys = sel.length ? sel : [...byKey.keys()];
+    const head = ['플랫폼', '유닛명', '월', '일수', '일평균요청', '요청수', '노출수', '노출률(%)', '클릭수', '요청CTR(%)', '노출eCPM', '요청eCPM', '매출'];
+    const lines = [head.join(',')];
+    const platName = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
+    for (const k of keys) {
+      const e = byKey.get(k);
+      for (const m of [...e.months.keys()].sort()) {
+        const a = e.months.get(m);
+        lines.push([platName[e.platform] || e.platform, `"${e.unit}"`, m, a.days,
+          Math.round(a.days ? a.req / a.days : 0), a.req, a.imp,
+          (a.req ? a.imp / a.req * 100 : 0).toFixed(1), a.clk,
+          (a.req ? a.clk / a.req * 100 : 0).toFixed(3),
+          Math.round(a.imp ? a.profit / a.imp * 1000 : 0),
+          Math.round(a.req ? a.profit / a.req * 1000 : 0),
+          Math.round(a.profit)].join(','));
+      }
+    }
+    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `cafe-monthly-${Date.now()}.csv`;
+    a.click();
+  }
+
+  function cmvBind() {
+    document.getElementById('cmv-ids')?.addEventListener('click', e => {
+      const chip = e.target.closest('.nvm-chip');
+      if (!chip) return;
+      const key = chip.dataset.key;
+      const i = cmvState.selected.indexOf(key);
+      if (i >= 0) cmvState.selected.splice(i, 1);
+      else {
+        if (cmvState.selected.length >= 6) { alert('최대 6개까지 비교할 수 있어요'); return; }
+        cmvState.selected.push(key);
+      }
+      cmvRender();
+    });
+    document.getElementById('cmv-metric')?.addEventListener('change', e => { cmvState.metric = e.target.value; cmvRender(); });
+    document.getElementById('cmv-platform')?.addEventListener('change', e => { cmvState.platform = e.target.value; cmvRender(); });
+    let t = null;
+    document.getElementById('cmv-search')?.addEventListener('input', e => {
+      clearTimeout(t); t = setTimeout(() => { cmvState.search = e.target.value; cmvRender(); }, 180);
+    });
+    document.getElementById('cmv-reset')?.addEventListener('click', () => { cmvState.selected = []; cmvRender(); });
+    document.getElementById('cmv-csv-btn')?.addEventListener('click', cmvDownloadCsv);
+  }
+
 
   // 그룹별 합계 계산 (profit/request/impression/click)
   // groupKey 미지정 → 전체, 지정 → 'platform' | 'device' 어느 필드의 어떤 값 매칭
