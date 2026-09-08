@@ -374,6 +374,7 @@
             <option value="paidEcpm">유상 eCPM</option>
             <option value="paidCpc">유상 CPC</option>
             <option value="ctr">CTR</option>
+            <option value="request">요청수</option>
             <option value="impression">노출수</option>
             <option value="click">클릭수</option>
             <option value="reqPerDay">일평균 요청</option>
@@ -896,7 +897,7 @@
       <!-- ▶ 유닛별 월별 성과 (플랫폼 통합) — 유닛 나란히 비교 -->
       <div class="table-section" id="cmv-section" style="display:none;">
         <div class="table-header-row">
-          <h2>유닛별 월별 성과 <span class="nvm-sub">플랫폼 통합 · 조회 기간 기준</span></h2>
+          <h2>지면별 비교 <span class="nvm-sub">플랫폼 통합 · 조회 기간 기준</span></h2>
           <div class="table-header-right">
             <span id="cmv-count"></span>
             <button id="cmv-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
@@ -904,6 +905,10 @@
         </div>
 
         <div class="cmp-tbl-filters">
+          <select id="cmv-gran" class="cmp-tbl-select" title="집계 단위">
+            <option value="month">📆 월별</option>
+            <option value="day">📅 일별</option>
+          </select>
           <select id="cmv-metric" class="cmp-tbl-select" title="비교 지표">
             <option value="impEcpm">노출 eCPM</option>
             <option value="reqEcpm">요청 eCPM</option>

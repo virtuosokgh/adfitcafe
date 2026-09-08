@@ -1185,7 +1185,7 @@
   //   → 네이버 '유상매출' 기준은 네이버 탭의 '광고ID별 월별 성과' 에서 확인
   // ══════════════════════════════════════════════════════════════
   const CMV_PALETTE = ['#03C75A', '#1A73E8', '#A855F7', '#F59E0B', '#EF4444', '#0EA5E9'];
-  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '' };
+  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '', gran: 'month' };
   let cmvSeeded = false;
 
   const CMV_METRICS = {
@@ -1197,6 +1197,7 @@
     impression:{ label: '노출수',      fmt: v => num(v),             calc: a => a.imp },
     click:     { label: '클릭수',      fmt: v => num(v),             calc: a => a.clk },
     reqPerDay: { label: '일평균 요청', fmt: v => num(Math.round(v)),  calc: a => a.days ? a.req / a.days : 0 },
+    request:   { label: '요청수',      fmt: v => num(Math.round(v)),  calc: a => a.req },
   };
   const CMV_PLAT = { kakao: '🟡 카카오', google: '🔵 구글', naverSA: '🟢 네이버 SA', naverDA: '🟪 네이버 DA' };
 
@@ -1210,7 +1211,8 @@
       const key = `${r.platform}::${r.unit}`;
       let e = byKey.get(key);
       if (!e) { e = { key, platform: r.platform, unit: r.unit, total: cmvBlank(), months: new Map() }; byKey.set(key, e); }
-      const m = String(r.date).slice(0, 7);
+      // 집계 단위: 월별이면 YYYY-MM, 일별이면 YYYY-MM-DD
+      const m = cmvState.gran === 'day' ? String(r.date) : String(r.date).slice(0, 7);
       let a = e.months.get(m);
       if (!a) { a = cmvBlank(); a.dates = new Set(); e.months.set(m, a); }
       const put = t => { t.req += r.request || 0; t.imp += r.impression || 0; t.clk += r.click || 0; t.profit += r.profit || 0; };
@@ -1228,13 +1230,14 @@
     const byKey = cmvAggregate();
 
     // 조회 기간이 1~2개월이면 월별 비교 의미가 약함 → 안내
-    const months = [...new Set(cmpRawRows.map(r => String(r.date).slice(0, 7)))].sort();
+    const months = [...new Set(cmpRawRows.map(r =>
+      cmvState.gran === 'day' ? String(r.date) : String(r.date).slice(0, 7)))].sort();
     const warn = document.getElementById('cmv-warn');
     if (warn) {
       const msgs = [];
-      if (months.length <= 1) {
-        msgs.push(`조회 기간이 <strong>${months[0] || '-'}</strong> 한 달뿐이라 월별 추이 비교가 안 됩니다. ` +
-          `위에서 기간을 <strong>3개월 이상</strong>으로 늘려 다시 조회해 주세요.`);
+      if (cmvState.gran === 'month' && months.length <= 1) {
+        msgs.push(`조회 기간이 <strong>${months[0] || '-'}</strong> 한 달뿐이라 월별 추이가 한 줄로만 나옵니다. ` +
+          `위에서 기간을 늘려 조회하거나, 집계 단위를 <strong>일별</strong>로 바꿔 보세요.`);
       }
       // 카카오 API 는 일별 조회가 90일까지만 허용된다 → 넘으면 카카오가 조용히 빠진다
       const have = new Set(cmpRawRows.map(r => r.platform));
@@ -1264,7 +1267,8 @@
     cmvRenderPivot(byKey, months);
     cmvRenderDetails(byKey);
     const el = document.getElementById('cmv-count');
-    if (el) el.textContent = `유닛 ${byKey.size}개 · 선택 ${cmvState.selected.length}개 · ${months.length}개월`;
+    if (el) el.textContent = `지면 ${byKey.size}개 · 선택 ${cmvState.selected.length}개 · `
+      + (cmvState.gran === 'day' ? `${months.length}일` : `${months.length}개월`);
   }
 
   function cmvRenderChips(byKey) {
@@ -1299,7 +1303,7 @@
     }
     const months = allMonths.filter(m => sel.some(k => byKey.get(k).months.has(m)));
     tbl.querySelector('thead').innerHTML =
-      `<tr><th>월</th>${sel.map((k, i) => {
+      `<tr><th>${cmvState.gran === 'day' ? '날짜' : '월'}</th>${sel.map((k, i) => {
         const e = byKey.get(k);
         return `<th class="nvm-grp" style="background:${CMV_PALETTE[i % CMV_PALETTE.length]}">${CMV_PLAT[e.platform] || ''}<br/>${cmvEsc(e.unit.slice(0, 30))}</th>`;
       }).join('')}</tr>`;
@@ -1336,8 +1340,10 @@
       const ms = [...e.months.keys()].sort();
       const tot = cmvBlank();
       ms.forEach(m => { const a = e.months.get(m); tot.req += a.req; tot.imp += a.imp; tot.clk += a.clk; tot.profit += a.profit; tot.days += a.days; });
+      // 일별 모드에서는 '일수'(항상 1) / '일평균 요청'(=요청수) 이 무의미하므로 생략
+      const isDay = cmvState.gran === 'day';
       const row = (label, a) => `<tr>
-        <td>${label}</td><td>${num(a.days)}</td><td>${num(Math.round(a.days ? a.req / a.days : 0))}</td>
+        <td>${label}</td>${isDay ? '' : `<td>${num(a.days)}</td><td>${num(Math.round(a.days ? a.req / a.days : 0))}</td>`}
         <td>${num(Math.round(a.req))}</td><td>${num(Math.round(a.imp))}</td>
         <td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>
         <td>${num(Math.round(a.clk))}</td>
@@ -1350,7 +1356,7 @@
       <div class="table-wrapper">
         <table class="nvm-table">
           <thead><tr>
-            <th>월</th><th>일수</th><th>일평균 요청</th><th>요청수</th><th>노출수</th><th>노출률</th>
+            <th>${isDay ? '날짜' : '월'}</th>${isDay ? '' : '<th>일수</th><th>일평균 요청</th>'}<th>요청수</th><th>노출수</th><th>노출률</th>
             <th>클릭</th><th>요청 CTR</th><th>노출 eCPM</th><th>요청 eCPM</th><th>매출</th>
           </tr></thead>
           <tbody>${ms.map(m => row(m, e.months.get(m))).join('')}</tbody>
@@ -1367,7 +1373,8 @@
     const byKey = cmvAggregate();
     const sel = cmvState.selected.filter(k => byKey.has(k));
     const keys = sel.length ? sel : [...byKey.keys()];
-    const head = ['플랫폼', '유닛명', '월', '일수', '일평균요청', '요청수', '노출수', '노출률(%)', '클릭수', '요청CTR(%)', '노출eCPM', '요청eCPM', '매출'];
+    const head = ['플랫폼', '유닛명', cmvState.gran === 'day' ? '날짜' : '월', '일수', '일평균요청',
+      '요청수', '노출수', '노출률(%)', '클릭수', '요청CTR(%)', '노출eCPM', '요청eCPM', '매출'];
     const lines = [head.join(',')];
     const platName = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
     for (const k of keys) {
@@ -1403,6 +1410,7 @@
       }
       cmvRender();
     });
+    document.getElementById('cmv-gran')?.addEventListener('change', e => { cmvState.gran = e.target.value; cmvRender(); });
     document.getElementById('cmv-metric')?.addEventListener('change', e => { cmvState.metric = e.target.value; cmvRender(); });
     document.getElementById('cmv-platform')?.addEventListener('change', e => { cmvState.platform = e.target.value; cmvRender(); });
     let t = null;
