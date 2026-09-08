@@ -358,6 +358,48 @@
           </table>
         </div>
       </div>
+
+      <!-- ▶ 광고ID별 월별 성과 (유상매출 기준) — 광고ID 나란히 비교 -->
+      <div class="table-section" id="nvm-section">
+        <div class="table-header-row">
+          <h2>광고ID별 월별 성과 <span class="nvm-sub">유상매출 기준</span></h2>
+          <div class="table-header-right">
+            <span id="nvm-count"></span>
+            <button id="nvm-csv-btn" class="csv-btn">⬇ CSV 다운로드</button>
+          </div>
+        </div>
+
+        <div class="cmp-tbl-filters">
+          <select id="nvm-metric" class="cmp-tbl-select" title="비교 지표">
+            <option value="paidEcpm">유상 eCPM</option>
+            <option value="paidCpc">유상 CPC</option>
+            <option value="ctr">CTR</option>
+            <option value="impression">노출수</option>
+            <option value="click">클릭수</option>
+            <option value="reqPerDay">일평균 요청</option>
+            <option value="paid">유상매출</option>
+            <option value="axz">AXZ매출</option>
+          </select>
+          <input id="nvm-search" class="cmp-tbl-input" type="search"
+                 placeholder="🔍 광고ID 검색 (예: 컨텐츠, cafe_Board)" autocomplete="off" />
+          <span class="nvm-hint">아래에서 광고ID를 골라 나란히 비교</span>
+          <button id="nvm-reset" type="button" class="cmp-tbl-reset">선택 해제</button>
+        </div>
+
+        <div id="nvm-ids" class="nvm-ids"></div>
+
+        <div class="nvm-block">
+          <h3 class="nvm-h3">📊 지표 비교 <span id="nvm-metric-label"></span></h3>
+          <div class="table-wrapper">
+            <table id="nvm-pivot" class="nvm-table"><thead></thead><tbody></tbody></table>
+          </div>
+        </div>
+
+        <div class="nvm-block">
+          <h3 class="nvm-h3">📋 광고ID별 상세</h3>
+          <div id="nvm-details"></div>
+        </div>
+      </div>
     </div><!-- /naver-section -->
 
     <!-- ========== 구글 애드매니저 섹션 ========== -->

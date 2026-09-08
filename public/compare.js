@@ -262,6 +262,7 @@
       if (!confirm(confirmMsg)) return;
       try { if (window.naverShared) await window.naverShared.remove(); } catch {}
       window.naverAllRows = [];
+      window.nvmRender?.();   // 광고ID별 월별 성과 갱신
       try { localStorage.removeItem(CMP_NAVER_CACHE_KEY); } catch {}
       syncNaverStatus();
       if (cmpRawRows.length) renderAll();
@@ -440,6 +441,8 @@
         }
 
         window.naverAllRows = rows;
+
+        window.nvmRender?.();   // 광고ID별 월별 성과 갱신
         try {
           localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
             fileName: file.name, uploadedAt, rows, csv
@@ -475,6 +478,7 @@
     const fresh = parseNaverCsv(data.csv);
     if (!fresh.length) return false;
     window.naverAllRows = fresh;
+    window.nvmRender?.();   // 광고ID별 월별 성과 갱신
     // 로컬에도 싱크 (오프라인 fallback)
     try {
       localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({
@@ -506,6 +510,7 @@
         const fresh = parseNaverCsv(parsed.csv);
         if (fresh.length) {
           window.naverAllRows = fresh;
+          window.nvmRender?.();   // 광고ID별 월별 성과 갱신
           try {
             localStorage.setItem(CMP_NAVER_CACHE_KEY, JSON.stringify({ ...parsed, rows: fresh }));
           } catch {}
@@ -516,6 +521,7 @@
       const { rows } = parsed;
       if (Array.isArray(rows) && rows.length) {
         window.naverAllRows = rows;
+        window.nvmRender?.();   // 광고ID별 월별 성과 갱신
         syncNaverStatus(parsed.fileName, parsed.uploadedAt, 'local');
         return true;
       }
@@ -643,6 +649,9 @@
     const iClk   = idx('클릭수', '클릭');
     const iPrf   = idx('AXZ매출(원)', 'AXZ매출', '매출', '수익');
     const iCtr   = idx('CTR(%)', 'CTR');
+    // 유상매출/뷰어블노출 — 광고ID별 월별 성과(유상 CPC·eCPM) 계산용
+    const iPaid  = idx('유상매출(원)', '유상매출');
+    const iView  = idx('뷰어블노출수', '뷰어블 노출수');
     console.log('[parseNaverCsv] headers:', headers);
     console.log('[parseNaverCsv] col idx:', { iDate, iId, iMedia, iReq, iImp, iClk, iPrf });
     const pn = s => {
@@ -672,6 +681,8 @@
         date, isMonthly, adId, media,
         request: pn(c[iReq]), impression: pn(c[iImp]),
         click: pn(c[iClk]), profit: pn(c[iPrf]), ctr: pn(c[iCtr]),
+        paid: iPaid >= 0 ? pn(c[iPaid]) : 0,      // 유상매출(원) — 네이버 총 매출
+        viewable: iView >= 0 ? pn(c[iView]) : 0,  // 뷰어블 노출수
       });
     }
     console.log(`[parseNaverCsv] scanned=${totalScanned}, cafe/카페 matched=${matched}`);

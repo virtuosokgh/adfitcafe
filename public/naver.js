@@ -136,6 +136,9 @@ function parseNaverCSV(text) {
       click:      naverParseNum(obj['클릭수']),
       profit:     naverParseNum(obj['AXZ매출(원)']),
       ctr:        naverParseNum(obj['CTR(%)']),
+      // 유상매출/뷰어블노출 — 광고ID별 월별 성과(유상 CPC·eCPM) 계산용
+      paid:       naverParseNum(obj['유상매출(원)']),
+      viewable:   naverParseNum(obj['뷰어블노출수']),
     });
   }
   return rows;
@@ -866,6 +869,7 @@ function handleNaverFile(file) {
 
     naverAllRows = rows;
     window.naverAllRows = rows;  // compare.js에서 접근
+    window.nvmRender?.();   // 광고ID별 월별 성과 갱신
 
     // 로컬에도 오프라인 fallback 용으로 저장
     try {
@@ -926,6 +930,7 @@ naverFileResetBtn.addEventListener('click', async () => {
 
   naverAllRows = [];
   window.naverAllRows = [];
+  window.nvmRender?.();   // 광고ID별 월별 성과 갱신
   naverChartMetric = 'profit';
   if (naverChartInstance) { naverChartInstance.destroy(); naverChartInstance = null; }
   naverSortCol = null; naverSortDir = 1;
@@ -987,6 +992,7 @@ function applyNaverRows(rows, fileName, uploadedAt, sourceLabel) {
   if (!rows || rows.length === 0) return false;
   naverAllRows = rows;
   window.naverAllRows = rows;  // compare.js에서 접근
+  window.nvmRender?.();   // 광고ID별 월별 성과 갱신
   const dateStr = window.naverShared?.formatUploadedAt(uploadedAt) ||
     (uploadedAt ? new Date(uploadedAt).toLocaleString('ko-KR') : '');
   const tag = sourceLabel === 'server' ? '공유됨' : '저장됨';
@@ -1070,3 +1076,243 @@ window.naverReloadFromShared = async () => {
 // ── 초기화 ────────────────────────────────
 initNaverFlatpickr();
 loadNaverFromCache();
+
+// ══════════════════════════════════════════════════════════════
+// 광고ID별 월별 성과 (유상매출 기준) — 페르난도 표 형식
+//   광고ID 를 여러 개 골라 월별로 나란히 비교한다.
+//   지표 정의 (페르난도 표와 동일하게 맞춤):
+//     일평균 요청 = 요청수 합 / 일수
+//     노출·클릭   = 월 합계
+//     CTR         = 클릭 / 노출
+//     유상 CPC    = 유상매출(원) / 클릭        ← AXZ매출 아님
+//     유상 eCPM   = 유상매출(원) / 노출 * 1000
+// ══════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+
+  const PALETTE = ['#03C75A', '#1A73E8', '#A855F7', '#F59E0B', '#EF4444', '#0EA5E9'];
+  const state = { selected: [], metric: 'paidEcpm', search: '' };
+
+  const METRICS = {
+    paidEcpm:  { label: '유상 eCPM',   fmt: v => won(v),      calc: a => a.imp ? a.paid / a.imp * 1000 : 0 },
+    paidCpc:   { label: '유상 CPC',    fmt: v => won(v),      calc: a => a.clk ? a.paid / a.clk : 0 },
+    ctr:       { label: 'CTR',         fmt: v => v.toFixed(3) + '%', calc: a => a.imp ? a.clk / a.imp * 100 : 0 },
+    impression:{ label: '노출수',      fmt: v => cnt(v),      calc: a => a.imp },
+    click:     { label: '클릭수',      fmt: v => cnt(v),      calc: a => a.clk },
+    reqPerDay: { label: '일평균 요청', fmt: v => cnt(v),      calc: a => a.days ? a.req / a.days : 0 },
+    paid:      { label: '유상매출',    fmt: v => won(v),      calc: a => a.paid },
+    axz:       { label: 'AXZ매출',     fmt: v => won(v),      calc: a => a.axz },
+  };
+
+  const won = n => Math.round(Number(n) || 0).toLocaleString('ko-KR') + '원';
+  const cnt = n => Math.round(Number(n) || 0).toLocaleString('ko-KR');
+
+  // 광고ID × 월 집계 (일단위 행만 사용, 월단위 -00 행은 중복이라 제외)
+  function aggregate() {
+    const rows = (window.naverAllRows || []).filter(r => r && !r.isMonthly && r.date);
+    const byId = new Map();   // adId → { total, months: Map(YYYY-MM → agg) }
+    for (const r of rows) {
+      const id = r.adId || '(없음)';
+      let e = byId.get(id);
+      if (!e) { e = { id, total: blank(), months: new Map() }; byId.set(id, e); }
+      const m = r.date.slice(0, 7);
+      let a = e.months.get(m);
+      if (!a) { a = blank(); a.dates = new Set(); e.months.set(m, a); }
+      add(a, r); a.dates.add(r.date);
+      add(e.total, r);
+    }
+    for (const e of byId.values()) {
+      for (const a of e.months.values()) a.days = a.dates.size;
+    }
+    return byId;
+  }
+  const blank = () => ({ req: 0, imp: 0, clk: 0, paid: 0, axz: 0, days: 0 });
+  function add(a, r) {
+    a.req += r.request || 0; a.imp += r.impression || 0; a.clk += r.click || 0;
+    a.paid += r.paid || 0;   a.axz += r.profit || 0;
+  }
+
+  function render() {
+    const sec = document.getElementById('nvm-section');
+    if (!sec) return;
+    const byId = aggregate();
+    if (!byId.size) {
+      sec.style.display = 'none';
+      return;
+    }
+    sec.style.display = '';
+    renderChips(byId);
+    renderPivot(byId);
+    renderDetails(byId);
+    const el = document.getElementById('nvm-count');
+    if (el) el.textContent = `광고ID ${byId.size}개 · 선택 ${state.selected.length}개`;
+  }
+
+  function renderChips(byId) {
+    const box = document.getElementById('nvm-ids');
+    if (!box) return;
+    const q = state.search.trim().toLowerCase();
+    const list = [...byId.values()]
+      .filter(e => !q || e.id.toLowerCase().includes(q))
+      .sort((a, b) => b.total.paid - a.total.paid);
+    box.innerHTML = list.map(e => {
+      const on = state.selected.includes(e.id);
+      const color = on ? PALETTE[state.selected.indexOf(e.id) % PALETTE.length] : '';
+      return `<span class="nvm-chip${on ? ' on' : ''}" data-id="${esc(e.id)}"
+        ${on ? `style="background:${color};"` : ''}>${esc(e.id)}
+        <span class="nvm-chip-rev">${won(e.total.paid)}</span></span>`;
+    }).join('') || '<span class="nvm-hint">검색 결과 없음</span>';
+  }
+
+  function renderPivot(byId) {
+    const tbl = document.getElementById('nvm-pivot');
+    const lbl = document.getElementById('nvm-metric-label');
+    const M = METRICS[state.metric];
+    if (lbl) lbl.textContent = `— ${M.label}`;
+    if (!tbl) return;
+    const sel = state.selected.filter(id => byId.has(id));
+    if (!sel.length) {
+      tbl.querySelector('thead').innerHTML = '';
+      tbl.querySelector('tbody').innerHTML =
+        `<tr><td><div class="nvm-empty">위에서 광고ID를 선택하면 월별로 나란히 비교됩니다</div></td></tr>`;
+      return;
+    }
+    const months = [...new Set(sel.flatMap(id => [...byId.get(id).months.keys()]))].sort();
+    tbl.querySelector('thead').innerHTML =
+      `<tr><th>월</th>${sel.map((id, i) =>
+        `<th class="nvm-grp" style="background:${PALETTE[i % PALETTE.length]}">${esc(id)}</th>`).join('')}</tr>`;
+    tbl.querySelector('tbody').innerHTML = months.map(m => {
+      const cells = sel.map(id => {
+        const a = byId.get(id).months.get(m);
+        if (!a) return `<td class="nvm-bd">-</td>`;
+        const v = M.calc(a);
+        // 전월 대비
+        const idx = months.indexOf(m);
+        let delta = '';
+        if (idx > 0) {
+          const prev = byId.get(id).months.get(months[idx - 1]);
+          if (prev) {
+            const pv = M.calc(prev);
+            if (pv > 0) {
+              const d = (v / pv - 1) * 100;
+              if (Math.abs(d) >= 0.5) {
+                delta = `<span class="${d > 0 ? 'nvm-up' : 'nvm-down'}">${d > 0 ? '▲' : '▼'}${Math.abs(d).toFixed(1)}%</span>`;
+              }
+            }
+          }
+        }
+        return `<td class="nvm-bd">${M.fmt(v)}${delta}</td>`;
+      }).join('');
+      return `<tr><td>${m}</td>${cells}</tr>`;
+    }).join('');
+  }
+
+  function renderDetails(byId) {
+    const box = document.getElementById('nvm-details');
+    if (!box) return;
+    const sel = state.selected.filter(id => byId.has(id));
+    if (!sel.length) { box.innerHTML = `<div class="nvm-empty">광고ID를 선택하면 상세 표가 나옵니다</div>`; return; }
+    box.innerHTML = sel.map((id, i) => {
+      const e = byId.get(id);
+      const months = [...e.months.keys()].sort();
+      const tot = blank();
+      months.forEach(m => { const a = e.months.get(m); add2(tot, a); tot.days += a.days; });
+      const row = (label, a) => `<tr>
+        <td>${label}</td>
+        <td>${cnt(a.days)}</td>
+        <td>${cnt(a.days ? a.req / a.days : 0)}</td>
+        <td>${cnt(a.imp)}</td>
+        <td>${cnt(a.clk)}</td>
+        <td>${a.imp ? (a.clk / a.imp * 100).toFixed(3) : '0.000'}%</td>
+        <td>${won(a.clk ? a.paid / a.clk : 0)}</td>
+        <td>${won(a.imp ? a.paid / a.imp * 1000 : 0)}</td>
+        <td>${won(a.paid)}</td>
+        <td>${won(a.axz)}</td>
+      </tr>`;
+      return `
+      <div class="nvm-detail-title" style="border-left-color:${PALETTE[i % PALETTE.length]}">${esc(id)}</div>
+      <div class="table-wrapper">
+        <table class="nvm-table">
+          <thead><tr>
+            <th>월</th><th>일수</th><th>일평균 요청</th><th>노출</th><th>클릭</th>
+            <th>CTR</th><th>유상 CPC</th><th>유상 eCPM</th><th>유상매출</th><th>AXZ매출</th>
+          </tr></thead>
+          <tbody>${months.map(m => row(m, e.months.get(m))).join('')}</tbody>
+          <tfoot>${row('합계', tot)}</tfoot>
+        </table>
+      </div>`;
+    }).join('');
+  }
+  function add2(t, a) { t.req += a.req; t.imp += a.imp; t.clk += a.clk; t.paid += a.paid; t.axz += a.axz; }
+
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function downloadCsv() {
+    const byId = aggregate();
+    const sel = state.selected.filter(id => byId.has(id));
+    const ids = sel.length ? sel : [...byId.keys()];
+    const head = ['광고ID', '월', '일수', '일평균요청', '노출', '클릭', 'CTR(%)', '유상CPC', '유상eCPM', '유상매출', 'AXZ매출'];
+    const lines = [head.join(',')];
+    for (const id of ids) {
+      const e = byId.get(id);
+      for (const m of [...e.months.keys()].sort()) {
+        const a = e.months.get(m);
+        lines.push([`"${id}"`, m, a.days, Math.round(a.days ? a.req / a.days : 0), a.imp, a.clk,
+          (a.imp ? a.clk / a.imp * 100 : 0).toFixed(3),
+          Math.round(a.clk ? a.paid / a.clk : 0),
+          Math.round(a.imp ? a.paid / a.imp * 1000 : 0),
+          Math.round(a.paid), Math.round(a.axz)].join(','));
+      }
+    }
+    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `naver-monthly-${Date.now()}.csv`;
+    a.click();
+  }
+
+  function bind() {
+    document.getElementById('nvm-ids')?.addEventListener('click', e => {
+      const chip = e.target.closest('.nvm-chip');
+      if (!chip) return;
+      const id = chip.dataset.id;
+      const i = state.selected.indexOf(id);
+      if (i >= 0) state.selected.splice(i, 1);
+      else {
+        if (state.selected.length >= 6) { alert('최대 6개까지 비교할 수 있어요'); return; }
+        state.selected.push(id);
+      }
+      render();
+    });
+    document.getElementById('nvm-metric')?.addEventListener('change', e => {
+      state.metric = e.target.value; render();
+    });
+    let t = null;
+    document.getElementById('nvm-search')?.addEventListener('input', e => {
+      clearTimeout(t);
+      t = setTimeout(() => { state.search = e.target.value; render(); }, 180);
+    });
+    document.getElementById('nvm-reset')?.addEventListener('click', () => {
+      state.selected = []; render();
+    });
+    document.getElementById('nvm-csv-btn')?.addEventListener('click', downloadCsv);
+  }
+
+  // 기본 선택: 유상매출 상위 2개 (한 번만)
+  let seeded = false;
+  function seed() {
+    if (seeded) return;
+    const byId = aggregate();
+    if (!byId.size) return;
+    seeded = true;
+    state.selected = [...byId.values()].sort((a, b) => b.total.paid - a.total.paid)
+      .slice(0, 2).map(e => e.id);
+  }
+
+  window.nvmRender = () => { seed(); render(); };
+
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', () => { bind(); window.nvmRender(); });
+  else { bind(); window.nvmRender(); }
+})();
