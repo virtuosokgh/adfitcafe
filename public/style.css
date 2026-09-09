@@ -2388,3 +2388,15 @@ tbody td:nth-child(3) { text-align: left; }
   box-shadow: inset 0 2px 0 #E5E7EB;
   border-top: none;
 }
+
+/* 지면별 비교 상세 — eCPM 컬럼의 기준(요청/노출) 부제 */
+.nvm-th-sub {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: -0.2px;
+}
+/* 노출 기준 eCPM — 페르난도·네이버 표와 대조하는 값이라 살짝 강조 */
+.nvm-table td.nvm-imp { background: #FFFBEB; }
+.nvm-table tbody tr:hover td.nvm-imp { background: #FEF6DC; }

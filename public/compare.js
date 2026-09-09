@@ -926,6 +926,9 @@
         impression: Number(r.impression || 0),
         click:      Number(r.click      || 0),
         profit,
+        // 유상매출(네이버 원장). SA 는 AXZ매출 = 유상매출 × 약 61.5% 라 값이 다르고,
+        // DA 는 둘이 같다. 카카오·구글 행에는 이 필드가 없어 profit 으로 대체된다.
+        paid: Number(r.paid || 0) || profit,
       };
       row.device = classifyDeviceForRow(row);
       out.push(row);
@@ -1201,13 +1204,16 @@
   //   → 네이버 '유상매출' 기준은 네이버 탭의 '광고ID별 월별 성과' 에서 확인
   // ══════════════════════════════════════════════════════════════
   const CMV_PALETTE = ['#03C75A', '#1A73E8', '#A855F7', '#F59E0B', '#EF4444', '#0EA5E9'];
-  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '', gran: 'month' };
+  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '', gran: 'month', rev: 'axz' };
+  // 매출 기준: 'axz' = 각 플랫폼 정산 매출(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)
+  //            'paid' = 네이버 유상매출 (페르난도·네이버 원장 기준). 카카오·구글은 값이 같다.
+  const cmvRev = a => (cmvState.rev === 'paid' ? a.paid : a.profit) || 0;
   let cmvSeeded = false;
 
   const CMV_METRICS = {
-    impEcpm:   { label: '노출 eCPM',   fmt: v => krw(v),             calc: a => a.imp ? a.profit / a.imp * 1000 : 0 },
-    reqEcpm:   { label: '요청 eCPM',   fmt: v => krw(v),             calc: a => a.req ? a.profit / a.req * 1000 : 0 },
-    profit:    { label: '매출',        fmt: v => krw(v),             calc: a => a.profit },
+    impEcpm:   { label: '노출 eCPM',   fmt: v => krw(v),             calc: a => a.imp ? cmvRev(a) / a.imp * 1000 : 0 },
+    reqEcpm:   { label: '요청 eCPM',   fmt: v => krw(v),             calc: a => a.req ? cmvRev(a) / a.req * 1000 : 0 },
+    profit:    { label: '매출',        fmt: v => krw(v),             calc: a => cmvRev(a) },
     ctr:       { label: '요청 CTR',    fmt: v => v.toFixed(3) + '%', calc: a => a.req ? a.clk / a.req * 100 : 0 },
     fill:      { label: '노출률',      fmt: v => v.toFixed(1) + '%', calc: a => a.req ? a.imp / a.req * 100 : 0 },
     impression:{ label: '노출수',      fmt: v => num(v),             calc: a => a.imp },
@@ -1217,7 +1223,7 @@
   };
   const CMV_PLAT = { kakao: '🟡 카카오', google: '🔵 구글', naverSA: '🟢 네이버 SA', naverDA: '🟪 네이버 DA' };
 
-  const cmvBlank = () => ({ req: 0, imp: 0, clk: 0, profit: 0, days: 0 });
+  const cmvBlank = () => ({ req: 0, imp: 0, clk: 0, profit: 0, paid: 0, days: 0 });
 
   // 유닛(플랫폼::유닛명) × 월 집계
   function cmvAggregate() {
@@ -1231,7 +1237,11 @@
       const m = cmvState.gran === 'day' ? String(r.date) : String(r.date).slice(0, 7);
       let a = e.months.get(m);
       if (!a) { a = cmvBlank(); a.dates = new Set(); e.months.set(m, a); }
-      const put = t => { t.req += r.request || 0; t.imp += r.impression || 0; t.clk += r.click || 0; t.profit += r.profit || 0; };
+      const put = t => {
+        t.req += r.request || 0; t.imp += r.impression || 0; t.clk += r.click || 0;
+        t.profit += r.profit || 0;
+        t.paid   += (r.paid ?? r.profit) || 0;
+      };
       put(a); put(e.total); a.dates.add(r.date);
     }
     for (const e of byKey.values()) for (const a of e.months.values()) a.days = a.dates.size;
@@ -1276,7 +1286,7 @@
     cmvRenderChips(byKey);
     if (!cmvSeeded) {
       cmvSeeded = true;
-      cmvState.selected = [...byKey.values()].sort((a, b) => b.total.profit - a.total.profit)
+      cmvState.selected = [...byKey.values()].sort((a, b) => cmvRev(b.total) - cmvRev(a.total))
         .slice(0, 2).map(e => e.key);
       cmvRenderChips(byKey);
     }
@@ -1294,13 +1304,13 @@
     const list = [...byKey.values()]
       .filter(e => !cmvState.platform || e.platform === cmvState.platform)
       .filter(e => !q || e.unit.toLowerCase().includes(q))
-      .sort((a, b) => b.total.profit - a.total.profit);
+      .sort((a, b) => cmvRev(b.total) - cmvRev(a.total));
     box.innerHTML = list.map(e => {
       const on = cmvState.selected.includes(e.key);
       const color = on ? CMV_PALETTE[cmvState.selected.indexOf(e.key) % CMV_PALETTE.length] : '';
       return `<span class="nvm-chip${on ? ' on' : ''}" data-key="${cmvEsc(e.key)}"
         ${on ? `style="background:${color};"` : ''}>${CMV_PLAT[e.platform] || e.platform} ${cmvEsc(e.unit.slice(0, 34))}
-        <span class="nvm-chip-rev">${krw(e.total.profit)}</span></span>`;
+        <span class="nvm-chip-rev">${krw(cmvRev(e.total))}</span></span>`;
     }).join('') || '<span class="nvm-hint">조건에 맞는 유닛이 없습니다</span>';
   }
 
@@ -1357,47 +1367,52 @@
     const isDay = cmvState.gran === 'day';
     const buckets = [...new Set(sel.flatMap(k => [...byKey.get(k).months.keys()]))].sort();
 
-    // 지면별 4개 컬럼(요청·매출·요청eCPM·채움률) + 합계 3개
+    // 지면별 5개 컬럼(요청·매출·요청eCPM·노출eCPM·채움률) + 합계 4개
+    //   요청 eCPM 과 노출 eCPM 을 나란히 두는 이유: 노출률이 지면마다 크게 달라서
+    //   (네이버DA 39% / 카카오 63% / 구글 97%) 하나만 보면 판단이 갈린다.
     const head1 = [`<th rowspan="2">${isDay ? '날짜' : '월'}</th>`];
     const head2 = [];
     sel.forEach((k, i) => {
       const e = byKey.get(k);
       const c = CMV_PALETTE[i % CMV_PALETTE.length];
-      head1.push(`<th colspan="4" class="nvm-grp" style="background:${c}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit.slice(0, 30))}</th>`);
-      head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM</th><th>채움</th>`);
+      head1.push(`<th colspan="5" class="nvm-grp" style="background:${c}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit.slice(0, 30))}</th>`);
+      head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM<br/><span class="nvm-th-sub">요청</span></th><th>eCPM<br/><span class="nvm-th-sub">노출</span></th><th>채움</th>`);
     });
-    head1.push(`<th colspan="3" class="nvm-grp nvm-sum">합계</th>`);
-    head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM</th>`);
+    head1.push(`<th colspan="4" class="nvm-grp nvm-sum">합계</th>`);
+    head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM<br/><span class="nvm-th-sub">요청</span></th><th>eCPM<br/><span class="nvm-th-sub">노출</span></th>`);
 
     const cellsFor = (a) => a
-      ? `<td class="nvm-bd">${num(Math.round(a.req))}</td><td>${krw(a.profit)}</td>` +
-        `<td><strong>${krw(a.req ? a.profit / a.req * 1000 : 0)}</strong></td>` +
+      ? `<td class="nvm-bd">${num(Math.round(a.req))}</td><td>${krw(cmvRev(a))}</td>` +
+        `<td><strong>${krw(a.req ? cmvRev(a) / a.req * 1000 : 0)}</strong></td>` +
+        `<td class="nvm-imp"><strong>${a.imp ? krw(cmvRev(a) / a.imp * 1000) : '-'}</strong></td>` +
         `<td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>`
-      : `<td class="nvm-bd">-</td><td>-</td><td>-</td><td>-</td>`;
+      : `<td class="nvm-bd">-</td><td>-</td><td>-</td><td>-</td><td>-</td>`;
 
     const bodyRows = buckets.map(b => {
       const sum = cmvBlank();
       const cells = sel.map(k => {
         const a = byKey.get(k).months.get(b);
-        if (a) { sum.req += a.req; sum.imp += a.imp; sum.clk += a.clk; sum.profit += a.profit; }
+        if (a) { sum.req += a.req; sum.imp += a.imp; sum.clk += a.clk; sum.profit += a.profit; sum.paid += a.paid; }
         return cellsFor(a);
       }).join('');
-      const sumCells = `<td class="nvm-bd">${num(Math.round(sum.req))}</td><td>${krw(sum.profit)}</td>` +
-        `<td><strong>${krw(sum.req ? sum.profit / sum.req * 1000 : 0)}</strong></td>`;
+      const sumCells = `<td class="nvm-bd">${num(Math.round(sum.req))}</td><td>${krw(cmvRev(sum))}</td>` +
+        `<td><strong>${krw(sum.req ? cmvRev(sum) / sum.req * 1000 : 0)}</strong></td>` +
+        `<td class="nvm-imp"><strong>${sum.imp ? krw(cmvRev(sum) / sum.imp * 1000) : '-'}</strong></td>`;
       return `<tr><td>${b}</td>${cells}${sumCells}</tr>`;
     }).join('');
 
     // 합계 행
     const totals = sel.map(k => {
       const t = cmvBlank();
-      for (const a of byKey.get(k).months.values()) { t.req += a.req; t.imp += a.imp; t.clk += a.clk; t.profit += a.profit; }
+      for (const a of byKey.get(k).months.values()) { t.req += a.req; t.imp += a.imp; t.clk += a.clk; t.profit += a.profit; t.paid += a.paid; }
       return t;
     });
     const grand = cmvBlank();
-    totals.forEach(t => { grand.req += t.req; grand.imp += t.imp; grand.clk += t.clk; grand.profit += t.profit; });
+    totals.forEach(t => { grand.req += t.req; grand.imp += t.imp; grand.clk += t.clk; grand.profit += t.profit; grand.paid += t.paid; });
     const footRow = `<tr><td>전체</td>${totals.map(cellsFor).join('')}` +
-      `<td class="nvm-bd">${num(Math.round(grand.req))}</td><td>${krw(grand.profit)}</td>` +
-      `<td><strong>${krw(grand.req ? grand.profit / grand.req * 1000 : 0)}</strong></td></tr>`;
+      `<td class="nvm-bd">${num(Math.round(grand.req))}</td><td>${krw(cmvRev(grand))}</td>` +
+      `<td><strong>${krw(grand.req ? cmvRev(grand) / grand.req * 1000 : 0)}</strong></td>` +
+      `<td class="nvm-imp"><strong>${grand.imp ? krw(cmvRev(grand) / grand.imp * 1000) : '-'}</strong></td></tr>`;
 
     box.innerHTML = `
       <div class="table-wrapper">
@@ -1408,7 +1423,10 @@
         </table>
       </div>
       <div class="nvm-hint" style="margin-top:8px;">
-        eCPM = 매출 ÷ 요청 × 1000 (요청 기준) · 채움 = 노출 ÷ 요청 · 합계는 선택한 지면들의 합
+        <strong>eCPM(요청)</strong> = 매출 ÷ 요청 × 1000 · <strong>eCPM(노출)</strong> = 매출 ÷ 노출 × 1000
+        (페르난도·네이버 표와 같은 기준) · 채움 = 노출 ÷ 요청 · 합계는 선택한 지면들의 합
+        <br/>매출 기준: <strong>${cmvState.rev === 'paid' ? '네이버 유상매출' : '정산 매출(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)'}</strong>
+        ${cmvState.rev === 'paid' ? ' — 카카오·구글은 유상매출 개념이 없어 정산 매출과 같은 값입니다.' : ''}
       </div>`;
   }
 
@@ -1420,7 +1438,9 @@
     const sel = cmvState.selected.filter(k => byKey.has(k));
     const keys = sel.length ? sel : [...byKey.keys()];
     const head = ['플랫폼', '유닛명', cmvState.gran === 'day' ? '날짜' : '월', '일수', '일평균요청',
-      '요청수', '노출수', '노출률(%)', '클릭수', '요청CTR(%)', '노출eCPM', '요청eCPM', '매출'];
+      '요청수', '노출수', '노출률(%)', '클릭수', '요청CTR(%)',
+      '정산매출', '정산_노출eCPM', '정산_요청eCPM',
+      '유상매출', '유상_노출eCPM', '유상_요청eCPM'];
     const lines = [head.join(',')];
     const platName = { kakao: '카카오', google: '구글', naverSA: '네이버 SA', naverDA: '네이버 DA' };
     for (const k of keys) {
@@ -1431,9 +1451,12 @@
           Math.round(a.days ? a.req / a.days : 0), a.req, a.imp,
           (a.req ? a.imp / a.req * 100 : 0).toFixed(1), a.clk,
           (a.req ? a.clk / a.req * 100 : 0).toFixed(3),
+          Math.round(a.profit),
           Math.round(a.imp ? a.profit / a.imp * 1000 : 0),
           Math.round(a.req ? a.profit / a.req * 1000 : 0),
-          Math.round(a.profit)].join(','));
+          Math.round(a.paid),
+          Math.round(a.imp ? a.paid / a.imp * 1000 : 0),
+          Math.round(a.req ? a.paid / a.req * 1000 : 0)].join(','));
       }
     }
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -1458,6 +1481,7 @@
     });
     document.getElementById('cmv-gran')?.addEventListener('change', e => { cmvState.gran = e.target.value; cmvRender(); });
     document.getElementById('cmv-metric')?.addEventListener('change', e => { cmvState.metric = e.target.value; cmvRender(); });
+    document.getElementById('cmv-rev')?.addEventListener('change', e => { cmvState.rev = e.target.value; cmvRender(); });
     document.getElementById('cmv-platform')?.addEventListener('change', e => { cmvState.platform = e.target.value; cmvRender(); });
     let t = null;
     document.getElementById('cmv-search')?.addEventListener('input', e => {
