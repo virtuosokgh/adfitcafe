@@ -25,7 +25,14 @@ const { runReport: runGoogleReport } = require('./lib/google-ad-manager');
 const app = express();
 const PORT = 3000;
 
-const ADFIT_API_URL = 'https://adfit-external-api.kakao.com/publisher/v2/report';
+// 카카오 애드핏 리포트 API.
+//   v2 는 2026-09 종료(410 GONE)되어 v3 로 이전했다.
+//   v3 스펙: GET ?apikey&fromDate&toDate&periodType(DAY|MONTH)
+//     날짜 형식 yyyyMMdd | yyyy-MM-dd (MONTH 는 yyyyMM)
+//     기간 제한 일 90일 / 월 12개월
+//   응답 필드명이 v2 와 달라서(adRequestCount/winCount/impressionCount/…)
+//   서버에서 v2 형식으로 정규화해 내려준다 → 프론트 수정 최소화.
+const ADFIT_API_URL = 'https://adfit-external-api.kakao.com/publisher/v3/report';
 const API_KEY = '1707c6fa620d72cf9d391a26db10a71dcbc62692';
 const GOOGLE_NETWORK_CODE = process.env.GOOGLE_NETWORK_CODE || '113951510';
 
@@ -54,6 +61,37 @@ function cacheSet(key, value) {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // 날짜 파라미터 포맷 검증
+// v3 응답을 v2 형식으로 정규화. (프론트가 기대하는 필드명 유지 + 신규 필드 추가)
+//   reportDate '2026-09-08' → day '20260908'
+//   adRequestCount → request / winCount → response
+//   impressionCount → impression / clickCount → click
+function normalizeAdfitV3(data) {
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  return {
+    ...data,
+    rows: rows.map(r => ({
+      day:        String(r.reportDate || '').replace(/-/g, ''),
+      adunitId:   r.adunitId,
+      adunitName: r.adunitName,
+      mediaId:    r.mediaId,
+      mediaName:  r.mediaName,
+      mediaUrl:   r.mediaUrl,
+      request:    Number(r.adRequestCount) || 0,
+      response:   Number(r.winCount) || 0,
+      impression: Number(r.impressionCount) || 0,
+      click:      Number(r.clickCount) || 0,
+      profit:     Number(r.profit) || 0,
+      // v3 신규 — 뷰어블 노출 및 애드핏이 계산해 주는 지표들
+      viewableImpression: Number(r.viewableImpressionCount) || 0,
+      fillRate:    Number(r.fillRate) || 0,
+      winFillRate: Number(r.winFillRate) || 0,
+      vr:          Number(r.vr) || 0,
+      ctr:         Number(r.ctr) || 0,
+      ecpm:        Number(r.ecpm) || 0,
+    })),
+  };
+}
+
 function isValidDate(str, type) {
   if (type === 'D') return /^\d{8}$/.test(str);
   if (type === 'M') return /^\d{6}$/.test(str);
@@ -90,7 +128,12 @@ app.get('/api/report', async (req, res) => {
     }
   }
 
-  const params = new URLSearchParams({ apikey: API_KEY, periodType, startDate, endDate });
+  const params = new URLSearchParams({
+    apikey: API_KEY,
+    periodType: periodType === 'M' ? 'MONTH' : 'DAY',
+    fromDate: startDate,
+    toDate: endDate,
+  });
   const url = `${ADFIT_API_URL}?${params.toString()}`;
 
   const promise = (async () => {
@@ -101,7 +144,7 @@ app.get('/api/report', async (req, res) => {
       e.status = response.status;
       throw e;
     }
-    return response.json();
+    return normalizeAdfitV3(await response.json());
   })();
   inflight.set(cacheKey, promise);
 
