@@ -765,7 +765,7 @@ async function fetchAndRender() {
     if (apiCache.has(qs)) {
       json = apiCache.get(qs);
     } else {
-      const res = await fetch(`/api/report?${qs}`);
+      const res = await fetch(`/api/report?${qs}`, { cache: 'no-store' });
       json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
       if (apiCache.size >= 20) apiCache.delete(apiCache.keys().next().value);
@@ -786,7 +786,7 @@ async function fetchAndRender() {
         if (apiCache.has(cmpCacheKey)) {
           cmpJson = apiCache.get(cmpCacheKey);
         } else {
-          const cmpRes = await fetch(`/api/report?${cmpQs}`);
+          const cmpRes = await fetch(`/api/report?${cmpQs}`, { cache: 'no-store' });
           cmpJson = await cmpRes.json();
           if (cmpRes.ok) apiCache.set(cmpCacheKey, cmpJson);
         }

@@ -207,7 +207,7 @@ async function googleFetchAndRender() {
   [gSummary, gChartSec, gTableSec].forEach(el => el.style.display = 'none');
 
   try {
-    const res = await fetch(`/api/google/report?startDate=${start}&endDate=${end}`);
+    const res = await fetch(`/api/google/report?startDate=${start}&endDate=${end}`, { cache: 'no-store' });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `HTTP ${res.status}`);
@@ -220,7 +220,7 @@ async function googleFetchAndRender() {
     if (gCmpStartD.value && gCmpEndD.value) {
       const b0 = gCmpStartD.value.replace(/-/g,'');
       const b1 = gCmpEndD.value.replace(/-/g,'');
-      const resB = await fetch(`/api/google/report?startDate=${b0}&endDate=${b1}`);
+      const resB = await fetch(`/api/google/report?startDate=${b0}&endDate=${b1}`, { cache: 'no-store' });
       if (resB.ok) {
         const { headers: hB, rows: rB } = await resB.json();
         googleAllRowsB = mapGoogleRows(hB, rB);

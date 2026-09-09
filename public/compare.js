@@ -1038,7 +1038,7 @@
     // 카카오 (빠름 ~0.5s)
     const kakaoPromise = (async () => {
       try {
-        const res = await fetch(`/api/report?periodType=D&startDate=${sYMD}&endDate=${eYMD}`);
+        const res = await fetch(`/api/report?periodType=D&startDate=${sYMD}&endDate=${eYMD}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('카카오 API 실패');
         const j = await res.json();
         kRows = mapKakaoRows(j);
@@ -1057,7 +1057,7 @@
     let googleErrMsg = '';
     const googlePromise = (async () => {
       try {
-        const res = await fetch(`/api/google/report?startDate=${sYMD}&endDate=${eYMD}`);
+        const res = await fetch(`/api/google/report?startDate=${sYMD}&endDate=${eYMD}`, { cache: 'no-store' });
         if (!res.ok) {
           // 서버가 보낸 에러 메시지 파싱 시도
           let detail = `HTTP ${res.status}`;

@@ -10,6 +10,7 @@ const GOOGLE_NETWORK_CODE = process.env.GOOGLE_NETWORK_CODE || '113951510';
 module.exports = async (req, res) => {
   const { startDate, endDate } = req.query;
   if (!/^\d{8}$/.test(startDate || '') || !/^\d{8}$/.test(endDate || '')) {
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(400).json({ error: 'startDate, endDate(YYYYMMDD)가 필요합니다.' });
   }
 
@@ -38,6 +39,8 @@ module.exports = async (req, res) => {
     return res.status(200).json(result);
   } catch (err) {
     console.error('Google API 오류:', err);
+    // 오류는 CDN 에 박히면 고친 뒤에도 계속 실패한다 → 캐시 금지
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(500).json({ error: err.message || '서버 오류' });
   }
 };

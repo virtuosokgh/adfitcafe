@@ -84,7 +84,7 @@ export default async function handler(req) {
   } catch (err) {
     return new Response(
       JSON.stringify({ error: '서버 오류' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
     );
   }
 }

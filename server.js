@@ -60,6 +60,15 @@ function cacheSet(key, value) {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// API 응답은 브라우저 캐시에 절대 남기지 않는다.
+// 410 GONE 같은 오류 응답은 HTTP 규격상 캐시가 허용돼서, 서버를 고쳐도
+// 브라우저가 예전 오류를 계속 꺼내 쓴다 (애드핏 v2 종료 때 이걸로 하루 날렸다).
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  next();
+});
+
 // 날짜 파라미터 포맷 검증
 // v3 응답을 v2 형식으로 정규화. (프론트가 기대하는 필드명 유지 + 신규 필드 추가)
 //   reportDate '2026-09-08' → day '20260908'
