@@ -2348,3 +2348,43 @@ tbody td:nth-child(3) { text-align: left; }
 }
 .nvm-table .nvm-sum { background: #475569 !important; }
 .nvm-table tfoot td { background: #F8FAFC; font-weight: 700; }
+
+/* =========================================
+   표 헤더 고정 (sticky thead)
+   표가 길어도 컬럼명이 항상 보이게, 세로 스크롤을
+   표 안쪽에서 처리한다.
+   ========================================= */
+.table-wrapper {
+  /* 창이 아주 작아도 최소 320px 은 보이게 */
+  max-height: max(320px, calc(100vh - 170px));
+  overflow: auto;
+}
+.table-wrapper thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+/*
+  border-collapse: collapse 에서는 sticky 셀의 border 가 스크롤 시
+  같이 밀려 사라진다. box-shadow 로 대체.
+*/
+.table-wrapper thead th {
+  box-shadow: inset 0 -2px 0 var(--border);
+  border-bottom: none;
+}
+.nvm-table thead th {
+  box-shadow: inset 0 -1px 0 #E5E7EB;
+  border-bottom: none;
+}
+/* 2줄 헤더(지면별 비교 상세): 2번째 줄은 1번째 줄 높이만큼 내려서 고정 */
+.nvm-table thead tr:first-child th { height: 32px; }
+.nvm-table thead tr:nth-child(2) th { top: 32px; z-index: 2; }
+
+/* 합계(tfoot)는 아래쪽에 고정 */
+.nvm-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  box-shadow: inset 0 2px 0 #E5E7EB;
+  border-top: none;
+}
