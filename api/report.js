@@ -59,6 +59,16 @@ export default async function handler(req) {
     const raw = await response.json();
     const data = response.ok ? normalizeAdfitV3(raw) : raw;
 
+    // 에러 응답은 절대 캐시하지 않는다.
+    //   v2 종료(410) 때 과거 날짜 요청의 에러가 s-maxage=86400 으로 CDN 에 박혀서
+    //   API 를 고친 뒤에도 최대 24시간 동안 실패가 이어질 수 있었다.
+    if (!response.ok) {
+      return new Response(JSON.stringify(raw), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      });
+    }
+
     // 과거 데이터(오늘 미포함): 24시간 CDN 캐시
     // 오늘 포함된 데이터: 5분 캐시 (stale-while-revalidate로 즉시 응답 후 백그라운드 갱신)
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
