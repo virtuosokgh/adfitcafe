@@ -525,6 +525,22 @@
       if (Array.isArray(rows) && rows.length) {
         window.naverAllRows = rows;
         window.nvmRender?.();   // 광고ID별 월별 성과 갱신
+
+        // 업로드한 리포트에 어제 데이터가 없으면 즉시 알린다.
+        //   네이버 리포트가 하루 늦게 채워지는 일이 잦아서, 업로드는 됐는데
+        //   "반영이 안 된다" 고 오해하는 경우가 반복됐다.
+        try {
+          const rng = naverDataRange(rows);
+          if (rng) {
+            const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+            const lag = Math.round((t0 - new Date(rng.last + 'T00:00:00')) / 86400000);
+            if (lag >= 2) {
+              alert(`⚠️ 업로드는 정상 완료됐지만, 이 리포트의 마지막 데이터는 ${rng.last} 입니다.\n\n` +
+                `어제(${new Date(t0 - 86400000).toISOString().slice(0, 10)}) 데이터가 아직 리포트에 없습니다.\n` +
+                `네이버 리포트 생성이 늦은 경우이니, 잠시 후 리포트를 다시 내려받아 업로드해 주세요.`);
+            }
+          }
+        } catch {}
         syncNaverStatus(parsed.fileName, parsed.uploadedAt, 'local');
         return true;
       }
@@ -1330,40 +1346,70 @@
     }).join('');
   }
 
+  // 상세표: 팀에서 쓰는 표 형식 — 행=날짜/월, 열=유닛별 지표 그룹 + 합계
+  //   유닛을 세로로 쌓으면 비교가 안 되니 한 표에 나란히 놓는다.
   function cmvRenderDetails(byKey) {
     const box = document.getElementById('cmv-details');
     if (!box) return;
     const sel = cmvState.selected.filter(k => byKey.has(k));
-    if (!sel.length) { box.innerHTML = `<div class="nvm-empty">유닛을 선택하면 상세 표가 나옵니다</div>`; return; }
-    box.innerHTML = sel.map((k, i) => {
+    if (!sel.length) { box.innerHTML = `<div class="nvm-empty">지면을 선택하면 상세 표가 나옵니다</div>`; return; }
+
+    const isDay = cmvState.gran === 'day';
+    const buckets = [...new Set(sel.flatMap(k => [...byKey.get(k).months.keys()]))].sort();
+
+    // 지면별 4개 컬럼(요청·매출·요청eCPM·채움률) + 합계 3개
+    const head1 = [`<th rowspan="2">${isDay ? '날짜' : '월'}</th>`];
+    const head2 = [];
+    sel.forEach((k, i) => {
       const e = byKey.get(k);
-      const ms = [...e.months.keys()].sort();
-      const tot = cmvBlank();
-      ms.forEach(m => { const a = e.months.get(m); tot.req += a.req; tot.imp += a.imp; tot.clk += a.clk; tot.profit += a.profit; tot.days += a.days; });
-      // 일별 모드에서는 '일수'(항상 1) / '일평균 요청'(=요청수) 이 무의미하므로 생략
-      const isDay = cmvState.gran === 'day';
-      const row = (label, a) => `<tr>
-        <td>${label}</td>${isDay ? '' : `<td>${num(a.days)}</td><td>${num(Math.round(a.days ? a.req / a.days : 0))}</td>`}
-        <td>${num(Math.round(a.req))}</td><td>${num(Math.round(a.imp))}</td>
-        <td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>
-        <td>${num(Math.round(a.clk))}</td>
-        <td>${a.req ? (a.clk / a.req * 100).toFixed(3) : '0.000'}%</td>
-        <td>${krw(a.imp ? a.profit / a.imp * 1000 : 0)}</td>
-        <td>${krw(a.req ? a.profit / a.req * 1000 : 0)}</td>
-        <td>${krw(a.profit)}</td></tr>`;
-      return `
-      <div class="nvm-detail-title" style="border-left-color:${CMV_PALETTE[i % CMV_PALETTE.length]}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit)}</div>
-      <div class="table-wrapper">
-        <table class="nvm-table">
-          <thead><tr>
-            <th>${isDay ? '날짜' : '월'}</th>${isDay ? '' : '<th>일수</th><th>일평균 요청</th>'}<th>요청수</th><th>노출수</th><th>노출률</th>
-            <th>클릭</th><th>요청 CTR</th><th>노출 eCPM</th><th>요청 eCPM</th><th>매출</th>
-          </tr></thead>
-          <tbody>${ms.map(m => row(m, e.months.get(m))).join('')}</tbody>
-          <tfoot>${row('합계', tot)}</tfoot>
-        </table>
-      </div>`;
+      const c = CMV_PALETTE[i % CMV_PALETTE.length];
+      head1.push(`<th colspan="4" class="nvm-grp" style="background:${c}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit.slice(0, 30))}</th>`);
+      head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM</th><th>채움</th>`);
+    });
+    head1.push(`<th colspan="3" class="nvm-grp nvm-sum">합계</th>`);
+    head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM</th>`);
+
+    const cellsFor = (a) => a
+      ? `<td class="nvm-bd">${num(Math.round(a.req))}</td><td>${krw(a.profit)}</td>` +
+        `<td><strong>${krw(a.req ? a.profit / a.req * 1000 : 0)}</strong></td>` +
+        `<td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>`
+      : `<td class="nvm-bd">-</td><td>-</td><td>-</td><td>-</td>`;
+
+    const bodyRows = buckets.map(b => {
+      const sum = cmvBlank();
+      const cells = sel.map(k => {
+        const a = byKey.get(k).months.get(b);
+        if (a) { sum.req += a.req; sum.imp += a.imp; sum.clk += a.clk; sum.profit += a.profit; }
+        return cellsFor(a);
+      }).join('');
+      const sumCells = `<td class="nvm-bd">${num(Math.round(sum.req))}</td><td>${krw(sum.profit)}</td>` +
+        `<td><strong>${krw(sum.req ? sum.profit / sum.req * 1000 : 0)}</strong></td>`;
+      return `<tr><td>${b}</td>${cells}${sumCells}</tr>`;
     }).join('');
+
+    // 합계 행
+    const totals = sel.map(k => {
+      const t = cmvBlank();
+      for (const a of byKey.get(k).months.values()) { t.req += a.req; t.imp += a.imp; t.clk += a.clk; t.profit += a.profit; }
+      return t;
+    });
+    const grand = cmvBlank();
+    totals.forEach(t => { grand.req += t.req; grand.imp += t.imp; grand.clk += t.clk; grand.profit += t.profit; });
+    const footRow = `<tr><td>전체</td>${totals.map(cellsFor).join('')}` +
+      `<td class="nvm-bd">${num(Math.round(grand.req))}</td><td>${krw(grand.profit)}</td>` +
+      `<td><strong>${krw(grand.req ? grand.profit / grand.req * 1000 : 0)}</strong></td></tr>`;
+
+    box.innerHTML = `
+      <div class="table-wrapper">
+        <table class="nvm-table nvm-wide">
+          <thead><tr>${head1.join('')}</tr><tr>${head2.join('')}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot>${footRow}</tfoot>
+        </table>
+      </div>
+      <div class="nvm-hint" style="margin-top:8px;">
+        eCPM = 매출 ÷ 요청 × 1000 (요청 기준) · 채움 = 노출 ÷ 요청 · 합계는 선택한 지면들의 합
+      </div>`;
   }
 
   const cmvEsc = s => String(s).replace(/[&<>"']/g, c =>

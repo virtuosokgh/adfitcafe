@@ -2337,3 +2337,14 @@ tbody td:nth-child(3) { text-align: left; }
   border: 1px solid #FDE68A;
   border-radius: 9px;
 }
+
+/* 지면별 비교 — 나란히 상세표 */
+.nvm-table.nvm-wide { font-size: 12.5px; }
+.nvm-table.nvm-wide th, .nvm-table.nvm-wide td { padding: 7px 9px; }
+.nvm-table thead tr:nth-child(2) th {
+  background: #F1F5F9;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.nvm-table .nvm-sum { background: #475569 !important; }
+.nvm-table tfoot td { background: #F8FAFC; font-weight: 700; }
