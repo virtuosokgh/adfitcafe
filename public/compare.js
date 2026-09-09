@@ -772,6 +772,62 @@
 
   const toYYYYMMDD = s => (s || '').replace(/-/g, '');
 
+  // 'YYYY-MM-DD' → '2026-09-08 (화)'. 요일 효과(주말 트래픽 급증)를 표에서
+  // 바로 알아볼 수 있어야 비율 조절 같은 판단이 가능하다.
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  function withDow(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return iso || '-';
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (isNaN(d)) return iso;
+    const w = d.getDay();
+    const cls = w === 0 ? 'cmp-dow-sun' : w === 6 ? 'cmp-dow-sat' : '';
+    return `${iso} <span class="cmp-dow${cls ? ' ' + cls : ''}">(${DOW[w]})</span>`;
+  }
+
+  // 그 날짜에 적용된 메모(비율 변경 기록 등). 차트 마커와 같은 데이터를 표에서도 쓴다.
+  const memosOn = iso => (memos || []).filter(m => m.appliedDate === iso);
+
+  // 날짜 셀 = 'YYYY-MM-DD (요일)' + 메모가 있으면 📌 (호버 시 툴팁)
+  function dateCell(iso) {
+    if (!iso) return '-';
+    const ms = memosOn(iso);
+    if (!ms.length) return withDow(iso);
+    const txt = ms.map(m => String(m.content || '').trim() + (m.author ? `\n— ${m.author}` : '')).join('\n\u2500\u2500\u2500\n');
+    return `${withDow(iso)} <span class="cmp-memo-mark" data-memo="${cmvEsc(txt)}" title="${cmvEsc(txt)}">📌</span>`;
+  }
+
+  // 메모 툴팁 — 표는 overflow:auto 컨테이너 안이라 absolute 는 잘린다 → fixed 로 body 에 띄운다.
+  let memoTipEl = null;
+  function showMemoTip(mark) {
+    const txt = mark.dataset.memo || '';
+    if (!txt) return;
+    if (!memoTipEl) {
+      memoTipEl = document.createElement('div');
+      memoTipEl.className = 'cmp-memo-tip';
+      document.body.appendChild(memoTipEl);
+    }
+    memoTipEl.textContent = txt;
+    memoTipEl.style.display = 'block';
+    const r = mark.getBoundingClientRect();
+    const w = memoTipEl.offsetWidth, h = memoTipEl.offsetHeight;
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    let top = r.top - h - 8;
+    if (top < 8) top = r.bottom + 8;           // 위가 좁으면 아래로
+    memoTipEl.style.left = `${left}px`;
+    memoTipEl.style.top  = `${top}px`;
+  }
+  function hideMemoTip() { if (memoTipEl) memoTipEl.style.display = 'none'; }
+  document.addEventListener('mouseover', e => {
+    const mark = e.target.closest?.('.cmp-memo-mark');
+    if (mark) showMemoTip(mark);
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest?.('.cmp-memo-mark')) hideMemoTip();
+  });
+  document.addEventListener('scroll', hideMemoTip, true);
+
   // ──────────────────────────────────────────────
   // 데이터 조회 (3개 플랫폼 병렬)
   // ──────────────────────────────────────────────
@@ -1352,7 +1408,7 @@
         }
         return `<td class="nvm-bd">${M.fmt(v)}${delta}</td>`;
       }).join('');
-      return `<tr><td>${m}</td>${cells}</tr>`;
+      return `<tr><td>${cmvState.gran === 'day' ? dateCell(m) : m}</td>${cells}</tr>`;
     }).join('');
   }
 
@@ -1398,7 +1454,7 @@
       const sumCells = `<td class="nvm-bd">${num(Math.round(sum.req))}</td><td>${krw(cmvRev(sum))}</td>` +
         `<td><strong>${krw(sum.req ? cmvRev(sum) / sum.req * 1000 : 0)}</strong></td>` +
         `<td class="nvm-imp"><strong>${sum.imp ? krw(cmvRev(sum) / sum.imp * 1000) : '-'}</strong></td>`;
-      return `<tr><td>${b}</td>${cells}${sumCells}</tr>`;
+      return `<tr><td>${isDay ? dateCell(b) : b}</td>${cells}${sumCells}</tr>`;
     }).join('');
 
     // 합계 행
@@ -2099,7 +2155,7 @@
         : platformBadge(r.platform);
       return `
       <tr class="cmp-row-${r.platform}${isGroupStart ? ' cmp-group-start' : ''}">
-        <td class="cmp-cell-date">${r.date || '-'}</td>
+        <td class="cmp-cell-date">${dateCell(r.date)}</td>
         <td class="cmp-cell-platform">${platformCell}</td>
         <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
         <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
@@ -2891,8 +2947,12 @@
     memos = await fetchMemos();
     memoLoaded = true;
     renderMemoList();
-    // 차트가 이미 그려져 있으면 메모 마커 반영
-    if (cmpRawRows.length) renderTrendChart(applyUnitFilter(cmpRawRows));
+    // 차트·표가 이미 그려져 있으면 메모 마커 반영
+    if (cmpRawRows.length) {
+      renderTrendChart(applyUnitFilter(cmpRawRows));
+      renderTable(applyUnitFilter(cmpRawRows));
+      cmvRender();
+    }
   }
 
   function setPieTabMode(mode) {

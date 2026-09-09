@@ -1204,7 +1204,7 @@ tbody td:nth-child(3) { text-align: left; }
 #cmp-table:not(.show-date) th[data-col="date"],
 #cmp-table:not(.show-date) td.cmp-cell-date { display: none; }
 #cmp-table:not(.show-date) col.cmp-col-date { width: 0; }
-#cmp-table.show-date col.cmp-col-date { width: 104px; }
+#cmp-table.show-date col.cmp-col-date { width: 132px; }
 #cmp-table td.cmp-cell-date {
   font-variant-numeric: tabular-nums;
   color: var(--text-sub);
@@ -2290,7 +2290,7 @@ tbody td:nth-child(3) { text-align: left; }
 /* 날짜 컬럼은 'YYYY-MM-DD' 가 절대 안 잘리게 최소 너비 확보 */
 .nvm-table thead th:first-child,
 .nvm-table tbody td:first-child,
-.nvm-table tfoot td:first-child { min-width: 96px; }
+.nvm-table tfoot td:first-child { min-width: 124px; }
 .nvm-table th, .nvm-table td {
   padding: 8px 10px;
   border-bottom: 1px solid #F1F3F5;
@@ -2413,3 +2413,32 @@ tbody td:nth-child(3) { text-align: left; }
 /* 노출 기준 eCPM — 페르난도·네이버 표와 대조하는 값이라 살짝 강조 */
 .nvm-table td.nvm-imp { background: #FFFBEB; }
 .nvm-table tbody tr:hover td.nvm-imp { background: #FEF6DC; }
+
+/* 날짜 옆 요일 — 주말은 색으로 구분 (주말 트래픽 효과를 표에서 바로 보게) */
+.cmp-dow { color: var(--text-sub); font-weight: 500; }
+.cmp-dow.cmp-dow-sat { color: #2563EB; font-weight: 700; }
+.cmp-dow.cmp-dow-sun { color: #DC2626; font-weight: 700; }
+
+/* 날짜 셀의 메모 마커 + 툴팁 */
+.cmp-memo-mark {
+  cursor: help;
+  font-size: 11px;
+  margin-left: 3px;
+  opacity: 0.85;
+}
+.cmp-memo-mark:hover { opacity: 1; }
+.cmp-memo-tip {
+  position: fixed;
+  z-index: 9999;
+  display: none;
+  max-width: 320px;
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-line;
+  color: #fff;
+  background: #1F2937;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
