@@ -1204,7 +1204,7 @@ tbody td:nth-child(3) { text-align: left; }
 #cmp-table:not(.show-date) th[data-col="date"],
 #cmp-table:not(.show-date) td.cmp-cell-date { display: none; }
 #cmp-table:not(.show-date) col.cmp-col-date { width: 0; }
-#cmp-table.show-date col.cmp-col-date { width: 96px; }
+#cmp-table.show-date col.cmp-col-date { width: 104px; }
 #cmp-table td.cmp-cell-date {
   font-variant-numeric: tabular-nums;
   color: var(--text-sub);
@@ -2277,7 +2277,20 @@ tbody td:nth-child(3) { text-align: left; }
 }
 .nvm-h3 span { font-weight: 500; color: var(--text-sub); font-size: 12.5px; margin-left: 6px; }
 
-.nvm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.nvm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  /*
+    전역 `table { table-layout: fixed }` 을 상속하면 컬럼이 개수로 균등 분할돼
+    (15컬럼 x 1100px = 73px) 날짜 '2026-09-08' 이 잘린다. 내용에 맞춰 늘어나게 auto.
+  */
+  table-layout: auto;
+}
+/* 날짜 컬럼은 'YYYY-MM-DD' 가 절대 안 잘리게 최소 너비 확보 */
+.nvm-table thead th:first-child,
+.nvm-table tbody td:first-child,
+.nvm-table tfoot td:first-child { min-width: 96px; }
 .nvm-table th, .nvm-table td {
   padding: 8px 10px;
   border-bottom: 1px solid #F1F3F5;
