@@ -531,12 +531,24 @@
         //   "반영이 안 된다" 고 오해하는 경우가 반복됐다.
         try {
           const rng = naverDataRange(rows);
+          const byPlat = naverLastByPlatform(rows);
           if (rng) {
             const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-            const lag = Math.round((t0 - new Date(rng.last + 'T00:00:00')) / 86400000);
-            if (lag >= 2) {
+            const yst = new Date(t0 - 86400000).toISOString().slice(0, 10);
+            const lag = dayLag(rng.last);
+            const behind = [];
+            if (byPlat.naverSA && dayLag(byPlat.naverSA) >= 2) behind.push(`SA ~${byPlat.naverSA}`);
+            if (byPlat.naverDA && dayLag(byPlat.naverDA) >= 2) behind.push(`DA ~${byPlat.naverDA}`);
+            if (behind.length) {
+              alert(`⚠️ 업로드는 정상 완료됐습니다. 다만 리포트 자체에 어제(${yst}) 데이터가 없습니다.\n\n` +
+                `${behind.join(' / ')}\n\n` +
+                (behind.length === 1
+                  ? `네이버는 SA 와 DA 의 집계 완료 시각이 달라서, 오전에 내려받으면 한쪽만 어제까지 채워져 있습니다.\n`
+                  : `네이버 리포트 생성이 늦은 경우입니다.\n`) +
+                `오후에 리포트를 다시 내려받아 업로드하면 채워집니다.`);
+            } else if (lag >= 2) {
               alert(`⚠️ 업로드는 정상 완료됐지만, 이 리포트의 마지막 데이터는 ${rng.last} 입니다.\n\n` +
-                `어제(${new Date(t0 - 86400000).toISOString().slice(0, 10)}) 데이터가 아직 리포트에 없습니다.\n` +
+                `어제(${yst}) 데이터가 아직 리포트에 없습니다.\n` +
                 `네이버 리포트 생성이 늦은 경우이니, 잠시 후 리포트를 다시 내려받아 업로드해 주세요.`);
             }
           }
@@ -597,13 +609,49 @@
     }).catch(() => {});
   });
 
+  // 광고ID / 매체명으로 네이버 SA·DA 판별. (mapNaverRows 안에만 있던 걸 끌어올림 —
+  // 데이터 마감일 계산에서도 같은 규칙을 써야 한다)
+  function classifyNaverPlatform(adId, media) {
+    if (NAVER_DA_EXTRA.some(re => re.test(adId))) return 'naverDA';
+    if (NAVER_DA_RE.test(adId))   return 'naverDA';
+    if (NAVER_SA_RE.test(adId))   return 'naverSA';
+    if (NAVER_DA_RE.test(media))  return 'naverDA';
+    if (NAVER_SA_RE.test(media))  return 'naverSA';
+    return null;
+  }
+
+  // 일자 형식 검사. '2026-12-00' 같은 월단위 합계 행이 최대 날짜로 잡히면
+  // "데이터 ~12/00" 처럼 엉뚱한 표시가 나오므로 일(01~31)까지 확인한다.
+  const isDayDate = d => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(d || ''));
+
   // CSV 안의 일별 데이터가 며칠까지 들어있는지 (월단위 -00 행 제외)
   function naverDataRange(rows) {
-    const ds = rows.filter(r => r && !r.isMonthly && /^\d{4}-\d{2}-\d{2}$/.test(r.date || ''))
+    const ds = rows.filter(r => r && !r.isMonthly && isDayDate(r.date))
                    .map(r => r.date).sort();
     if (!ds.length) return null;
     return { first: ds[0], last: ds[ds.length - 1] };
   }
+
+  // SA / DA 각각의 마지막 데이터 날짜.
+  //   네이버 리포트는 SA 와 DA 의 집계 완료 시점이 달라서, 오전에 내려받으면
+  //   SA 는 어제까지 있는데 DA 는 그제까지만 있는 경우가 있다.
+  //   (예: 09-09 업로드분 → SA ~09-08 / DA ~09-07)
+  //   하나의 날짜만 보여주면 "전날 네이버가 안 들어왔다" 는 오해가 반복된다.
+  function naverLastByPlatform(rows) {
+    const out = { naverSA: '', naverDA: '' };
+    for (const r of (rows || [])) {
+      if (!r || r.isMonthly || !isDayDate(r.date)) continue;
+      const p = classifyNaverPlatform(r.adId || '', r.media || '');
+      if (p && r.date > out[p]) out[p] = r.date;
+    }
+    return out;
+  }
+
+  // 오늘 0시 기준 며칠 전 데이터인지
+  const dayLag = (iso) => {
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    return Math.round((t0 - new Date(iso + 'T00:00:00')) / 86400000);
+  };
 
   function syncNaverStatus(fileName, uploadedAt, source) {
     const rows = window.naverAllRows || [];
@@ -615,20 +663,28 @@
       // '업로드 시각' 보다 '데이터가 며칠까지 있는지' 가 실제로 중요하다.
       //   업로드는 했는데 리포트에 최근 날짜가 없어서 "반영 안 됨" 으로 오해하는 경우가 많음.
       const rng = naverDataRange(rows);
+      const byPlat = naverLastByPlatform(rows);
       let dataStr = '';
       if (rng) {
         const md = d => d.slice(5).replace('-', '/');
-        // 날짜 기준으로 계산 (시각 차이로 하루가 앞당겨 표시되지 않게)
-        const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-        const lag = Math.round((t0 - new Date(rng.last + 'T00:00:00')) / 86400000);
-        const warn = lag >= 3 ? ' ⚠️' : '';
-        dataStr = ` · 📅 데이터 ~${md(rng.last)}${lag >= 1 ? `(${lag}일 전)` : '(오늘)'}${warn}`;
+        const lbl = d => `${md(d)}${dayLag(d) >= 1 ? `(${dayLag(d)}일 전)` : '(오늘)'}`;
+        if (byPlat.naverSA && byPlat.naverDA && byPlat.naverSA !== byPlat.naverDA) {
+          // SA/DA 시차가 있으면 따로 보여준다 — 이게 "전날 안 들어옴" 의 실제 원인
+          dataStr = ` · 📅 SA ~${lbl(byPlat.naverSA)} · DA ~${lbl(byPlat.naverDA)} ⚠️`;
+        } else {
+          const lag = dayLag(rng.last);
+          dataStr = ` · 📅 데이터 ~${lbl(rng.last)}${lag >= 3 ? ' ⚠️' : ''}`;
+        }
       }
       statusEl.textContent = fileName
         ? `✅ ${fileName} (${rows.length}건) · ${tag}${timeStr ? ' ' + timeStr : ''}${dataStr}`
         : `✅ 네이버 데이터 ${rows.length}건 · ${tag}${timeStr ? ' ' + timeStr : ''}${dataStr}`;
       statusEl.title = rng
-        ? `일별 데이터 범위: ${rng.first} ~ ${rng.last}\n업로드: ${new Date(uploadedAt || Date.now()).toLocaleString('ko-KR')}\n출처: ${source === 'server' ? '서버 공유본' : '내 브라우저 로컬 캐시'}`
+        ? `일별 데이터 범위: ${rng.first} ~ ${rng.last}\n`
+          + `  · SA 마지막: ${byPlat.naverSA || '-'}\n`
+          + `  · DA 마지막: ${byPlat.naverDA || '-'}\n`
+          + `업로드: ${new Date(uploadedAt || Date.now()).toLocaleString('ko-KR')}\n`
+          + `출처: ${source === 'server' ? '서버 공유본' : '내 브라우저 로컬 캐시'}`
         : '';
       statusEl.classList.add('has-data');
       resetBtn.classList.remove('hidden');
@@ -907,15 +963,7 @@
 
   function mapNaverRows(start, end) {
     const out = [];
-    // 1차 분류 + 범위 체크 (월/일 구분)
-    const classify = (adId, media) => {
-      if (NAVER_DA_EXTRA.some(re => re.test(adId))) return 'naverDA';
-      if (NAVER_DA_RE.test(adId))   return 'naverDA';
-      if (NAVER_SA_RE.test(adId))   return 'naverSA';
-      if (NAVER_DA_RE.test(media))  return 'naverDA';
-      if (NAVER_SA_RE.test(media))  return 'naverSA';
-      return null;
-    };
+    const classify = classifyNaverPlatform;
     const inDaily = (r) => !r.isMonthly && r.date >= start && r.date <= end;
     const inMonth = (r) => {
       if (!r.isMonthly) return false;
