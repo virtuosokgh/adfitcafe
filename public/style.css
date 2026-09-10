@@ -2443,26 +2443,28 @@ tbody td:nth-child(3) { text-align: left; }
   pointer-events: none;
 }
 
-/* 날짜 정렬 토글 버튼 */
-.cmp-tbl-sortbtn {
-  padding: 5px 10px;
-  font-size: 12px;
+/* 날짜 헤더 셀 안의 정렬 방향 버튼 */
+.cmp-th-sort {
+  margin-left: 5px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
   color: var(--text-sub);
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
+  vertical-align: middle;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.cmp-tbl-sortbtn:hover { background: #F0F4FF; }
-.cmp-tbl-sortbtn.on {
-  color: var(--primary);
-  background: #E8F0FE;
-  border-color: #A8C7FA;
-  font-weight: 600;
+.cmp-th-sort:hover { background: #E8F0FE; color: var(--primary); border-color: #A8C7FA; }
+.cmp-th-sort.on {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
 }
-.cmp-tbl-sortbtn.hidden { display: none; }
 
 /*
   지면별 비교 상세 — 가로스크롤 없이 한 화면에.
@@ -2480,3 +2482,37 @@ tbody td:nth-child(3) { text-align: left; }
 .nvm-table.nvm-wide tfoot td:first-child { min-width: 118px; }
 /* 축약값 셀은 마우스 올리면 정확한 값이 나온다는 신호 */
 .nvm-table.nvm-wide td[title] { cursor: help; }
+
+/*
+  유닛별 상세 컬럼 폭.
+  전에는 유닛명이 남는 폭을 전부 먹어서(374px) 네이버처럼 유닛명이 짧은 행은
+  유닛명과 수익 사이가 300px 이나 비었고, 수익 컬럼도 120px 이라 값이 멀어 보였다.
+  → 모든 실컬럼을 내용 크기로 줄이고, 남는 폭은 맨 끝 여백 컬럼이 흡수한다.
+*/
+#cmp-table { table-layout: fixed; min-width: 0; }
+#cmp-table col.cmp-col-unit    { width: 220px; }
+#cmp-table col.cmp-col-profit  { width: 84px; }
+#cmp-table col.cmp-col-request { width: 84px; }
+#cmp-table col.cmp-col-impression { width: 84px; }
+#cmp-table col.cmp-col-click   { width: 64px; }
+#cmp-table col.cmp-col-ctr     { width: 72px; }
+#cmp-table col.cmp-col-ecpm    { width: 68px; }
+#cmp-table col.cmp-col-share   { width: 64px; }
+#cmp-table col.cmp-col-spacer  { width: auto; }
+#cmp-table thead th,
+#cmp-table tbody td { white-space: nowrap; }
+#cmp-table td.cmp-cell-unit,
+#cmp-table th[data-col="unit"] { white-space: normal; }
+#cmp-table .cmp-th-spacer,
+#cmp-table td.cmp-cell-spacer { padding: 0; border-bottom-color: transparent; }
+/* 숫자 컬럼 여백 축소 — 값끼리 너무 떨어져 보이지 않게 */
+#cmp-table thead th[data-col="profit"],
+#cmp-table thead th[data-col="request"],
+#cmp-table thead th[data-col="impression"],
+#cmp-table thead th[data-col="click"],
+#cmp-table thead th[data-col="ctr"],
+#cmp-table thead th[data-col="ecpm"],
+#cmp-table thead th[data-col="share"],
+#cmp-table tbody td.cmp-cell-num,
+#cmp-table tbody td.cmp-cell-profit { padding-left: 7px; padding-right: 7px; }
+

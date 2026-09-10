@@ -859,8 +859,6 @@
           <label class="cmp-tbl-check">
             <input type="checkbox" id="cmp-tbl-daily" /> 날짜별로 보기
           </label>
-          <button id="cmp-tbl-datesort" type="button" class="cmp-tbl-sortbtn hidden"
-                  title="날짜 정렬 방향 전환">📅 최신순 ↓</button>
           <button id="cmp-tbl-reset" type="button" class="cmp-tbl-reset">초기화</button>
         </div>
         <div class="table-wrapper">
@@ -876,19 +874,24 @@
               <col class="cmp-col-ctr" />
               <col class="cmp-col-ecpm" />
               <col class="cmp-col-share" />
+              <!-- 남는 폭을 흡수하는 여백 컬럼. 없으면 유닛명 컬럼이 남는 폭을
+                   전부 먹어서 유닛명과 수익 사이에 300px 짜리 공백이 생긴다. -->
+              <col class="cmp-col-spacer" />
             </colgroup>
             <thead>
               <tr>
-                <th data-col="date">날짜<span class="sort-icon">↕</span></th>
+                <th data-col="date">날짜<button id="cmp-date-sort" type="button"
+                    class="cmp-th-sort" title="날짜 최신순으로 정렬">최신순 ↓</button></th>
                 <th data-col="platform">플랫폼<span class="sort-icon">↕</span></th>
                 <th data-col="unit">유닛명<span class="sort-icon">↕</span></th>
-                <th data-col="profit">수익<span class="sort-icon">↕</span></th>
+                <th data-col="profit">수익(원)<span class="sort-icon">↕</span></th>
                 <th data-col="request">요청수<span class="sort-icon">↕</span></th>
                 <th data-col="impression">노출수<span class="sort-icon">↕</span></th>
                 <th data-col="click">클릭수<span class="sort-icon">↕</span></th>
                 <th data-col="ctr">요청 CTR<span class="sort-icon">↕</span></th>
                 <th data-col="ecpm">eCPM<span class="sort-icon">↕</span></th>
                 <th data-col="share">점유율<span class="sort-icon">↕</span></th>
+                <th class="cmp-th-spacer"></th>
               </tr>
             </thead>
             <tbody id="cmp-table-body"></tbody>

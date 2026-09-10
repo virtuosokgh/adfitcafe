@@ -25,16 +25,20 @@
   let cmpPeriod = 'daily';
   let cmpRawRows = [];         // 서버 응답 원본을 합친 것 (platform/unit/date/impression/click/profit)
   let cmpSortState = { col: 'unit', dir: 'asc' };
+  // 사용자가 헤더/버튼으로 정렬을 직접 고른 적이 있는지.
+  //   false 인 동안에는 '날짜별 보기' 를 켤 때마다 날짜 최신순을 기본값으로 강제한다.
+  let cmpSortUserSet = false;
 
-  // 날짜 정렬 버튼의 라벨/활성 상태를 현재 정렬 상태에 맞춘다.
+  // 날짜 헤더 안의 정렬 버튼 라벨을 현재 정렬 상태에 맞춘다.
   function syncDateSortBtn() {
-    const btn = document.getElementById('cmp-tbl-datesort');
+    const btn = document.getElementById('cmp-date-sort');
     if (!btn) return;
-    btn.classList.toggle('hidden', !tblFilter.daily);
     const on = cmpSortState.col === 'date';
     btn.classList.toggle('on', on);
-    btn.textContent = !on ? '📅 날짜순으로'
-      : cmpSortState.dir === 'desc' ? '📅 최신순 ↓' : '📅 오래된순 ↑';
+    btn.textContent = !on ? '정렬' : cmpSortState.dir === 'desc' ? '최신순 ↓' : '오래된순 ↑';
+    btn.title = on
+      ? (cmpSortState.dir === 'desc' ? '최신순 → 오래된순으로 전환' : '오래된순 → 최신순으로 전환')
+      : '날짜 최신순으로 정렬';
   }
   // 유닛별 상세 테이블 필터 상태
   let tblFilter = { platform: '', unit: '', daily: false };
@@ -293,6 +297,7 @@
         if (!col) return;
         if (cmpSortState.col === col) cmpSortState.dir = cmpSortState.dir === 'asc' ? 'desc' : 'asc';
         else { cmpSortState.col = col; cmpSortState.dir = 'desc'; }
+        cmpSortUserSet = true;
         syncDateSortBtn();
         if (cmpRawRows.length) renderAll();
       });
@@ -309,13 +314,16 @@
       // 날짜별로 보면 궁금한 건 '최근 며칠' 이다 → 기본 최신순
       if (tblFilter.daily) cmpSortState = { col: 'date', dir: 'desc' };
       else if (cmpSortState.col === 'date') cmpSortState = { col: 'unit', dir: 'asc' };
+      cmpSortUserSet = false;
       syncDateSortBtn();
       rerenderTable();
     });
-    // 날짜 정렬 방향 토글 버튼
-    document.getElementById('cmp-tbl-datesort')?.addEventListener('click', () => {
+    // 날짜 컬럼 헤더 안의 정렬 버튼 (헤더 클릭 핸들러와 중복 실행되지 않게 차단)
+    document.getElementById('cmp-date-sort')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (cmpSortState.col === 'date') cmpSortState.dir = cmpSortState.dir === 'desc' ? 'asc' : 'desc';
       else cmpSortState = { col: 'date', dir: 'desc' };
+      cmpSortUserSet = true;
       syncDateSortBtn();
       rerenderTable();
     });
@@ -2167,6 +2175,12 @@
     const daily  = tblFilter.daily;
     const tableEl = document.getElementById('cmp-table');
     if (tableEl) tableEl.classList.toggle('show-date', daily);
+    // 날짜별 보기인데 사용자가 정렬을 직접 고르지 않았다면 날짜 최신순.
+    //   (조회 버튼·필터 변경 등 어느 경로로 들어와도 동일하게 보장)
+    if (daily && !cmpSortUserSet && cmpSortState.col !== 'date') {
+      cmpSortState = { col: 'date', dir: 'desc' };
+    }
+    syncDateSortBtn();
 
     // 집계 키: 기본은 platform+unit(기간 합), 날짜별 모드면 날짜까지 쪼갠다.
     // device 는 row 마다 동일하니 첫 row 의 값 채택
@@ -2261,13 +2275,14 @@
         <td class="cmp-cell-date">${dateCell(r.date)}</td>
         <td class="cmp-cell-platform">${platformCell}</td>
         <td class="cmp-cell-unit" title="${r.unit}">${r.unit}</td>
-        <td class="cmp-cell-profit"><strong>${krw(r.profit)}</strong></td>
+        <td class="cmp-cell-profit" title="${krw(r.profit)}"><strong>${num(Math.round(r.profit))}</strong></td>
         <td class="cmp-cell-num">${r.request > 0 ? num(r.request) : '-'}</td>
         <td class="cmp-cell-num">${num(r.impression)}</td>
         <td class="cmp-cell-num">${num(r.click)}</td>
         <td class="cmp-cell-num">${r.ctr == null ? '-' : pct(r.ctr)}</td>
         <td class="cmp-cell-num">${krw(r.ecpm)}</td>
         <td class="cmp-cell-num">${pct(r.share)}</td>
+        <td class="cmp-cell-spacer"></td>
       </tr>`;
     }).join('');
 
