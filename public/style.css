@@ -2516,3 +2516,63 @@ tbody td:nth-child(3) { text-align: left; }
 #cmp-table tbody td.cmp-cell-num,
 #cmp-table tbody td.cmp-cell-profit { padding-left: 7px; padding-right: 7px; }
 
+
+/*
+  지면별 비교 상세 — 그룹 헤더가 nowrap 이라 긴 유닛명이 그룹 폭을 405px 로
+  키웠고, 남는 폭이 그룹 첫 컬럼(요청)에 몰려 117px 짜리 공백이 생겼다.
+  헤더를 두 줄로 접어 폭 요구를 없앤다.
+*/
+.nvm-table .nvm-grp {
+  white-space: normal;
+  line-height: 1.35;
+  max-width: 240px;
+}
+.nvm-table .nvm-grp-unit {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.95;
+  word-break: break-all;
+}
+/* 폭은 colgroup 이 정한다 (auto 레이아웃은 남는 폭을 첫 컬럼에 몰아넣는다) */
+.nvm-table.nvm-fixed { table-layout: fixed; }
+
+/*
+  colspan 그룹 헤더(유닛명)의 글자 폭이 그룹 폭을 하위 컬럼 합보다 크게
+  만들고, 그 차액이 그룹 첫 컬럼(요청)에 전부 몰려 요청↔매출이 벌어졌다.
+  헤더 내용을 absolute 로 띄워 폭 계산에서 완전히 빼버린다.
+*/
+.nvm-table.nvm-wide thead th.nvm-grp {
+  position: relative;
+  height: 36px;
+  padding: 0;
+  max-width: none;
+}
+.nvm-table.nvm-wide thead th.nvm-grp .nvm-grp-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 5px;
+  overflow: hidden;
+  line-height: 1.2;
+  text-align: center;
+}
+.nvm-table.nvm-wide thead th.nvm-grp .nvm-grp-unit {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+.nvm-table.nvm-wide th.nvm-spacer,
+.nvm-table.nvm-wide td.nvm-spacer {
+  width: auto;
+  padding: 0;
+  border-left: none;
+  background: transparent;
+  box-shadow: none;
+}

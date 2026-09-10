@@ -1343,7 +1343,7 @@
   //   → 네이버 '유상매출' 기준은 네이버 탭의 '광고ID별 월별 성과' 에서 확인
   // ══════════════════════════════════════════════════════════════
   const CMV_PALETTE = ['#03C75A', '#1A73E8', '#A855F7', '#F59E0B', '#EF4444', '#0EA5E9'];
-  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '', gran: 'month', rev: 'axz' };
+  const cmvState = { selected: [], metric: 'impEcpm', platform: '', search: '', gran: 'month', rev: 'axz', dateDir: 'desc' };
   // 매출 기준: 'axz' = 각 플랫폼 정산 매출(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)
   //            'paid' = 네이버 유상매출 (페르난도·네이버 원장 기준). 카카오·구글은 값이 같다.
   const cmvRev = a => (cmvState.rev === 'paid' ? a.paid : a.profit) || 0;
@@ -1504,21 +1504,29 @@
     if (!sel.length) { box.innerHTML = `<div class="nvm-empty">지면을 선택하면 상세 표가 나옵니다</div>`; return; }
 
     const isDay = cmvState.gran === 'day';
+    // 최신순이 기본. 최근 며칠을 보는 게 대부분이라 위에서부터 최신이어야 한다.
     const buckets = [...new Set(sel.flatMap(k => [...byKey.get(k).months.keys()]))].sort();
+    if (cmvState.dateDir === 'desc') buckets.reverse();
 
     // 지면별 5개 컬럼(요청·매출·요청eCPM·노출eCPM·채움률) + 합계 4개
     //   요청 eCPM 과 노출 eCPM 을 나란히 두는 이유: 노출률이 지면마다 크게 달라서
     //   (네이버DA 39% / 카카오 63% / 구글 97%) 하나만 보면 판단이 갈린다.
-    const head1 = [`<th rowspan="2">${isDay ? '날짜' : '월'}</th>`];
+    const sortLbl = cmvState.dateDir === 'desc' ? '최신순 ↓' : '오래된순 ↑';
+    const head1 = [`<th rowspan="2">${isDay ? '날짜' : '월'}`
+      + `<button type="button" class="cmp-th-sort on" data-cmv-datesort="1"`
+      + ` title="${cmvState.dateDir === 'desc' ? '최신순 → 오래된순으로 전환' : '오래된순 → 최신순으로 전환'}">${sortLbl}</button></th>`];
     const head2 = [];
     sel.forEach((k, i) => {
       const e = byKey.get(k);
       const c = CMV_PALETTE[i % CMV_PALETTE.length];
-      head1.push(`<th colspan="5" class="nvm-grp" style="background:${c}">${CMV_PLAT[e.platform] || ''} ${cmvEsc(e.unit.slice(0, 30))}</th>`);
+      head1.push(`<th colspan="5" class="nvm-grp" style="background:${c}" title="${cmvEsc(e.unit)}">`
+        + `<span class="nvm-grp-inner"><span>${CMV_PLAT[e.platform] || ''}</span>`
+        + `<span class="nvm-grp-unit">${cmvEsc(e.unit)}</span></span></th>`);
       head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM<br/><span class="nvm-th-sub">요청</span></th><th>eCPM<br/><span class="nvm-th-sub">노출</span></th><th>채움</th>`);
     });
-    head1.push(`<th colspan="4" class="nvm-grp nvm-sum">합계</th>`);
+    head1.push(`<th colspan="4" class="nvm-grp nvm-sum"><span class="nvm-grp-inner"><span>합계</span></span></th>`);
     head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM<br/><span class="nvm-th-sub">요청</span></th><th>eCPM<br/><span class="nvm-th-sub">노출</span></th>`);
+    head1.push(`<th rowspan="2" class="nvm-spacer"></th>`);
 
     const cellsFor = (a) => a
       ? `<td class="nvm-bd" title="요청 ${Math.round(a.req).toLocaleString()}">${cmvShort(a.req)}</td>` +
@@ -1539,7 +1547,7 @@
         `<td title="${cmvFull(cmvRev(sum))}">${cmvShort(cmvRev(sum))}</td>` +
         `<td><strong>${Math.round(sum.req ? cmvRev(sum) / sum.req * 1000 : 0).toLocaleString()}</strong></td>` +
         `<td class="nvm-imp"><strong>${sum.imp ? Math.round(cmvRev(sum) / sum.imp * 1000).toLocaleString() : '-'}</strong></td>`;
-      return `<tr><td>${isDay ? dateCell(b) : b}</td>${cells}${sumCells}</tr>`;
+      return `<tr><td>${isDay ? dateCell(b) : b}</td>${cells}${sumCells}<td class="nvm-spacer"></td></tr>`;
     }).join('');
 
     // 합계 행
@@ -1554,11 +1562,28 @@
       `<td class="nvm-bd" title="요청 ${Math.round(grand.req).toLocaleString()}">${cmvShort(grand.req)}</td>` +
       `<td title="${cmvFull(cmvRev(grand))}">${cmvShort(cmvRev(grand))}</td>` +
       `<td><strong>${Math.round(grand.req ? cmvRev(grand) / grand.req * 1000 : 0).toLocaleString()}</strong></td>` +
-      `<td class="nvm-imp"><strong>${grand.imp ? Math.round(cmvRev(grand) / grand.imp * 1000).toLocaleString() : '-'}</strong></td></tr>`;
+      `<td class="nvm-imp"><strong>${grand.imp ? Math.round(cmvRev(grand) / grand.imp * 1000).toLocaleString() : '-'}</strong></td>` +
+      `<td class="nvm-spacer"></td></tr>`;
+
+    // 컬럼 폭을 colgroup 으로 못박는다.
+    //   auto 레이아웃은 남는 폭을 그룹의 첫 컬럼(요청)에 몰아넣어서
+    //   요청↔매출 사이가 100px 가까이 벌어졌다. 마지막 여백 컬럼만 유동.
+    const W = { date: isDay ? 150 : 132, req: 66, rev: 66, ecpm: 54, fill: 56 };
+    const cols = [`<col style="width:${W.date}px" />`];
+    sel.forEach(() => cols.push(
+      `<col style="width:${W.req}px" />`, `<col style="width:${W.rev}px" />`,
+      `<col style="width:${W.ecpm}px" />`, `<col style="width:${W.ecpm}px" />`,
+      `<col style="width:${W.fill}px" />`));
+    cols.push(`<col style="width:${W.req}px" />`, `<col style="width:${W.rev}px" />`,
+      `<col style="width:${W.ecpm}px" />`, `<col style="width:${W.ecpm}px" />`);
+    cols.push(`<col />`);   // 남는 폭 흡수
+    const minW = W.date + sel.length * (W.req + W.rev + 2 * W.ecpm + W.fill)
+      + (W.req + W.rev + 2 * W.ecpm);
 
     box.innerHTML = `
       <div class="table-wrapper">
-        <table class="nvm-table nvm-wide">
+        <table class="nvm-table nvm-wide nvm-fixed" style="min-width:${minW}px;">
+          <colgroup>${cols.join('')}</colgroup>
           <thead><tr>${head1.join('')}</tr><tr>${head2.join('')}</tr></thead>
           <tbody>${bodyRows}</tbody>
           <tfoot>${footRow}</tfoot>
@@ -1644,6 +1669,12 @@
     });
     document.getElementById('cmv-reset')?.addEventListener('click', () => { cmvState.selected = []; cmvRender(); });
     document.getElementById('cmv-csv-btn')?.addEventListener('click', cmvDownloadCsv);
+    // 상세표 날짜 정렬 토글 — 표를 매번 새로 그리므로 컨테이너에 위임한다.
+    document.getElementById('cmv-details')?.addEventListener('click', e => {
+      if (!e.target.closest('[data-cmv-datesort]')) return;
+      cmvState.dateDir = cmvState.dateDir === 'desc' ? 'asc' : 'desc';
+      cmvRender();
+    });
   }
 
 
