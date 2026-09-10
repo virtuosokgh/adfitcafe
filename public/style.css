@@ -2442,3 +2442,41 @@ tbody td:nth-child(3) { text-align: left; }
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
   pointer-events: none;
 }
+
+/* 날짜 정렬 토글 버튼 */
+.cmp-tbl-sortbtn {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-sub);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.cmp-tbl-sortbtn:hover { background: #F0F4FF; }
+.cmp-tbl-sortbtn.on {
+  color: var(--primary);
+  background: #E8F0FE;
+  border-color: #A8C7FA;
+  font-weight: 600;
+}
+.cmp-tbl-sortbtn.hidden { display: none; }
+
+/*
+  지면별 비교 상세 — 가로스크롤 없이 한 화면에.
+  전역 `table { min-width: 1100px }` 이 15컬럼을 강제로 늘려 스크롤을 만들었다.
+  숫자를 만 단위로 축약했으니 자연 너비로 두고, 여백도 줄인다.
+*/
+.nvm-table.nvm-wide {
+  min-width: 0;
+  font-size: 12px;
+}
+.nvm-table.nvm-wide th,
+.nvm-table.nvm-wide td { padding: 6px 7px; }
+.nvm-table.nvm-wide thead th:first-child,
+.nvm-table.nvm-wide tbody td:first-child,
+.nvm-table.nvm-wide tfoot td:first-child { min-width: 118px; }
+/* 축약값 셀은 마우스 올리면 정확한 값이 나온다는 신호 */
+.nvm-table.nvm-wide td[title] { cursor: help; }

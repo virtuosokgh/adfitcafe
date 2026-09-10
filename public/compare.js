@@ -25,6 +25,17 @@
   let cmpPeriod = 'daily';
   let cmpRawRows = [];         // 서버 응답 원본을 합친 것 (platform/unit/date/impression/click/profit)
   let cmpSortState = { col: 'unit', dir: 'asc' };
+
+  // 날짜 정렬 버튼의 라벨/활성 상태를 현재 정렬 상태에 맞춘다.
+  function syncDateSortBtn() {
+    const btn = document.getElementById('cmp-tbl-datesort');
+    if (!btn) return;
+    btn.classList.toggle('hidden', !tblFilter.daily);
+    const on = cmpSortState.col === 'date';
+    btn.classList.toggle('on', on);
+    btn.textContent = !on ? '📅 날짜순으로'
+      : cmpSortState.dir === 'desc' ? '📅 최신순 ↓' : '📅 오래된순 ↑';
+  }
   // 유닛별 상세 테이블 필터 상태
   let tblFilter = { platform: '', unit: '', daily: false };
   let cmpTrendChart = null;
@@ -282,6 +293,7 @@
         if (!col) return;
         if (cmpSortState.col === col) cmpSortState.dir = cmpSortState.dir === 'asc' ? 'desc' : 'asc';
         else { cmpSortState.col = col; cmpSortState.dir = 'desc'; }
+        syncDateSortBtn();
         if (cmpRawRows.length) renderAll();
       });
     });
@@ -292,7 +304,22 @@
     const tblDailyEl = document.getElementById('cmp-tbl-daily');
     const rerenderTable = () => { if (cmpRawRows.length) renderTable(applyUnitFilter(cmpRawRows)); };
     tblPlatEl?.addEventListener('change', () => { tblFilter.platform = tblPlatEl.value; rerenderTable(); });
-    tblDailyEl?.addEventListener('change', () => { tblFilter.daily = tblDailyEl.checked; rerenderTable(); });
+    tblDailyEl?.addEventListener('change', () => {
+      tblFilter.daily = tblDailyEl.checked;
+      // 날짜별로 보면 궁금한 건 '최근 며칠' 이다 → 기본 최신순
+      if (tblFilter.daily) cmpSortState = { col: 'date', dir: 'desc' };
+      else if (cmpSortState.col === 'date') cmpSortState = { col: 'unit', dir: 'asc' };
+      syncDateSortBtn();
+      rerenderTable();
+    });
+    // 날짜 정렬 방향 토글 버튼
+    document.getElementById('cmp-tbl-datesort')?.addEventListener('click', () => {
+      if (cmpSortState.col === 'date') cmpSortState.dir = cmpSortState.dir === 'desc' ? 'asc' : 'desc';
+      else cmpSortState = { col: 'date', dir: 'desc' };
+      syncDateSortBtn();
+      rerenderTable();
+    });
+    syncDateSortBtn();
     // 검색은 입력할 때마다 다시 그리되 과도한 렌더 방지 (디바운스 200ms)
     let tblUnitTimer = null;
     tblUnitEl?.addEventListener('input', () => {
@@ -1486,9 +1513,10 @@
     head2.push(`<th class="nvm-bd">요청</th><th>매출</th><th>eCPM<br/><span class="nvm-th-sub">요청</span></th><th>eCPM<br/><span class="nvm-th-sub">노출</span></th>`);
 
     const cellsFor = (a) => a
-      ? `<td class="nvm-bd">${num(Math.round(a.req))}</td><td>${krw(cmvRev(a))}</td>` +
-        `<td><strong>${krw(a.req ? cmvRev(a) / a.req * 1000 : 0)}</strong></td>` +
-        `<td class="nvm-imp"><strong>${a.imp ? krw(cmvRev(a) / a.imp * 1000) : '-'}</strong></td>` +
+      ? `<td class="nvm-bd" title="요청 ${Math.round(a.req).toLocaleString()}">${cmvShort(a.req)}</td>` +
+        `<td title="${cmvFull(cmvRev(a))}">${cmvShort(cmvRev(a))}</td>` +
+        `<td><strong>${Math.round(a.req ? cmvRev(a) / a.req * 1000 : 0).toLocaleString()}</strong></td>` +
+        `<td class="nvm-imp"><strong>${a.imp ? Math.round(cmvRev(a) / a.imp * 1000).toLocaleString() : '-'}</strong></td>` +
         `<td>${a.req ? (a.imp / a.req * 100).toFixed(1) : '0.0'}%</td>`
       : `<td class="nvm-bd">-</td><td>-</td><td>-</td><td>-</td><td>-</td>`;
 
@@ -1499,9 +1527,10 @@
         if (a) { sum.req += a.req; sum.imp += a.imp; sum.clk += a.clk; sum.profit += a.profit; sum.paid += a.paid; }
         return cellsFor(a);
       }).join('');
-      const sumCells = `<td class="nvm-bd">${num(Math.round(sum.req))}</td><td>${krw(cmvRev(sum))}</td>` +
-        `<td><strong>${krw(sum.req ? cmvRev(sum) / sum.req * 1000 : 0)}</strong></td>` +
-        `<td class="nvm-imp"><strong>${sum.imp ? krw(cmvRev(sum) / sum.imp * 1000) : '-'}</strong></td>`;
+      const sumCells = `<td class="nvm-bd" title="요청 ${Math.round(sum.req).toLocaleString()}">${cmvShort(sum.req)}</td>` +
+        `<td title="${cmvFull(cmvRev(sum))}">${cmvShort(cmvRev(sum))}</td>` +
+        `<td><strong>${Math.round(sum.req ? cmvRev(sum) / sum.req * 1000 : 0).toLocaleString()}</strong></td>` +
+        `<td class="nvm-imp"><strong>${sum.imp ? Math.round(cmvRev(sum) / sum.imp * 1000).toLocaleString() : '-'}</strong></td>`;
       return `<tr><td>${isDay ? dateCell(b) : b}</td>${cells}${sumCells}</tr>`;
     }).join('');
 
@@ -1514,9 +1543,10 @@
     const grand = cmvBlank();
     totals.forEach(t => { grand.req += t.req; grand.imp += t.imp; grand.clk += t.clk; grand.profit += t.profit; grand.paid += t.paid; });
     const footRow = `<tr><td>전체</td>${totals.map(cellsFor).join('')}` +
-      `<td class="nvm-bd">${num(Math.round(grand.req))}</td><td>${krw(cmvRev(grand))}</td>` +
-      `<td><strong>${krw(grand.req ? cmvRev(grand) / grand.req * 1000 : 0)}</strong></td>` +
-      `<td class="nvm-imp"><strong>${grand.imp ? krw(cmvRev(grand) / grand.imp * 1000) : '-'}</strong></td></tr>`;
+      `<td class="nvm-bd" title="요청 ${Math.round(grand.req).toLocaleString()}">${cmvShort(grand.req)}</td>` +
+      `<td title="${cmvFull(cmvRev(grand))}">${cmvShort(cmvRev(grand))}</td>` +
+      `<td><strong>${Math.round(grand.req ? cmvRev(grand) / grand.req * 1000 : 0).toLocaleString()}</strong></td>` +
+      `<td class="nvm-imp"><strong>${grand.imp ? Math.round(cmvRev(grand) / grand.imp * 1000).toLocaleString() : '-'}</strong></td></tr>`;
 
     box.innerHTML = `
       <div class="table-wrapper">
@@ -1529,10 +1559,23 @@
       <div class="nvm-hint" style="margin-top:8px;">
         <strong>eCPM(요청)</strong> = 매출 ÷ 요청 × 1000 · <strong>eCPM(노출)</strong> = 매출 ÷ 노출 × 1000
         (페르난도·네이버 표와 같은 기준) · 채움 = 노출 ÷ 요청 · 합계는 선택한 지면들의 합
+        <br/>요청·매출은 <strong>만 단위로 축약</strong>했습니다 — 셀에 마우스를 올리면 정확한 값이 나옵니다. eCPM 은 원 단위 그대로.
         <br/>매출 기준: <strong>${cmvState.rev === 'paid' ? '네이버 유상매출' : '정산 매출(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)'}</strong>
         ${cmvState.rev === 'paid' ? ' — 카카오·구글은 유상매출 개념이 없어 정산 매출과 같은 값입니다.' : ''}
       </div>`;
   }
+
+  // 큰 숫자 축약. '13,309,056' → '1,331만' / '504,000,000' → '5.04억'
+  //   지면 3개(카카오·네이버·합계)를 가로스크롤 없이 한 화면에 넣으려면
+  //   원 단위 그대로는 컬럼이 너무 넓어진다. 정확한 값은 셀 title 에 남긴다.
+  function cmvShort(v) {
+    const n = Math.round(Number(v) || 0);
+    const a = Math.abs(n);
+    if (a >= 100000000) return (n / 100000000).toFixed(2).replace(/\.?0+$/, '') + '억';
+    if (a >= 10000)     return Math.round(n / 10000).toLocaleString() + '만';
+    return n.toLocaleString();
+  }
+  const cmvFull = v => Math.round(Number(v) || 0).toLocaleString() + '원';
 
   const cmvEsc = s => String(s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2163,6 +2206,18 @@
     const useDeviceGroup = groupingMode === 'device';
     const { col, dir } = cmpSortState;
 
+    // 날짜 정렬은 '언제' 가 1차 관심사라, 플랫폼 그룹핑보다 날짜를 앞세운다.
+    //   (그룹핑을 유지하면 유닛별로 날짜가 흩어져서 "최신순" 이 안 보인다)
+    if (col === 'date' && daily) {
+      arr.sort((a, b) => {
+        const c = dir === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+        if (c !== 0) return c;
+        const ga = useDeviceGroup ? (DEVICE_ORDER[a.device] ?? 99) : (PLATFORM_ORDER[a.platform] ?? 99);
+        const gb = useDeviceGroup ? (DEVICE_ORDER[b.device] ?? 99) : (PLATFORM_ORDER[b.platform] ?? 99);
+        if (ga !== gb) return ga - gb;
+        return String(a.unit).localeCompare(String(b.unit));
+      });
+    } else
     arr.sort((a, b) => {
       const ga = useDeviceGroup ? (DEVICE_ORDER[a.device] ?? 99) : (PLATFORM_ORDER[a.platform] ?? 99);
       const gb = useDeviceGroup ? (DEVICE_ORDER[b.device] ?? 99) : (PLATFORM_ORDER[b.platform] ?? 99);
