@@ -922,6 +922,21 @@
   // ──────────────────────────────────────────────
   // 데이터 조회 (3개 플랫폼 병렬)
   // ──────────────────────────────────────────────
+  // 카카오 애드핏 API 가 주는 profit 은 '유상매출' 이고, 광고팀 시트의
+  // 'AXZ매출' 은 계약상 추가 혜택이 붙어 유상매출보다 크다.
+  // 네이버·구글은 이미 AXZ매출 기준이라, 카카오만 유상매출로 두면
+  // 플랫폼 비교가 8% 어긋난다. 광고팀 시트에서 확인된 배수:
+  //   2026-07-01 ~        : x1.08     (9만행 검증, 카페 전 지면 동일)
+  //   2026-05-01 ~ 06-30  : x1.00     (시트에 혜택 미반영 구간)
+  //   ~ 2026-04-30        : x1.0833
+  const KAKAO_AXZ_BANDS = [
+    { from: '2026-07-01', mult: 1.08 },
+    { from: '2026-05-01', mult: 1.00 },
+    { from: '0000-00-00', mult: 1.0833 },
+  ];
+  const kakaoAxzMult = (dateIso) =>
+    (KAKAO_AXZ_BANDS.find(b => String(dateIso) >= b.from) || { mult: 1 }).mult;
+
   // 카카오 응답 → 표준 행
   //   unit = adunitId (예: "DAN-0DM6xroBT6yPi5Xg") 로 식별
   //   adunitName은 부가정보로 유지
@@ -942,7 +957,10 @@
         request: Number(r.request || 0),
         impression: Number(r.impression || 0),
         click: Number(r.click || 0),
-        profit: Number(r.profit || 0),
+        // AXZ매출 기준으로 환산 (네이버·구글과 같은 기준)
+        profit: Math.round(Number(r.profit || 0) * kakaoAxzMult(dateIso)),
+        // 애드핏이 준 원값(유상매출) — 필요할 때 대조용
+        paid: Number(r.profit || 0),
       };
       row.device = classifyDeviceForRow(row);
       out.push(row);
@@ -1594,7 +1612,7 @@
         (페르난도·네이버 표와 같은 기준) · 채움 = 노출 ÷ 요청 · 합계는 선택한 지면들의 합
         <br/>요청·매출은 <strong>만 단위로 축약</strong>했습니다 — 셀에 마우스를 올리면 정확한 값이 나옵니다. eCPM 은 원 단위 그대로.
         <br/>매출 기준: <strong>${cmvState.rev === 'paid' ? '네이버 유상매출' : '정산 매출(카카오 적립금 / 구글 수익 / 네이버 AXZ매출)'}</strong>
-        ${cmvState.rev === 'paid' ? ' — 카카오·구글은 유상매출 개념이 없어 정산 매출과 같은 값입니다.' : ''}
+        ${cmvState.rev === 'paid' ? ' — 구글은 유상매출 개념이 없어 정산 매출과 같은 값입니다. 카카오는 AXZ매출 = 유상매출 × 1.08.' : ''}
       </div>`;
   }
 
