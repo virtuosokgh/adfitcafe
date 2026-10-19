@@ -316,6 +316,9 @@ app.post('/api/naver-csv', async (req, res) => {
     });
     saveFallback(CSV_KEY, csv);   // 업로드 직후 조회가 실패해도 버티도록
     const metaPayload = { fileName, uploader, uploadedAt, bytes: csv.length };
+    // 메타도 폴백에 같이 저장 — 저장소 읽기가 503 일 때 데이터는 새것인데
+    // 파일명·업로드 시각만 예전 값으로 보이는 문제 방지
+    saveFallback(META_KEY, JSON.stringify(metaPayload));
     await blob.put(META_KEY, JSON.stringify(metaPayload), {
       access: BLOB_ACCESS,
       contentType: 'application/json; charset=utf-8',
